@@ -17,5 +17,6 @@
          "messages": [{"role": "user", "content": "Hello LLM Gateway!"}]
        }'
 
-TLS Status: {{ if .Values.tls.enabled }}🔒 Enabled (Secret: {{ .Values.tls.secretName }}){{ else }}⚠️  Disabled (HTTP Only){{ end }}
+TLS Status:        {{ if .Values.tls.enabled }}🔒 Enabled (Secret: {{ .Values.tls.secretName }}){{ else }}⚠️  Disabled (HTTP Only){{ end }}
+Guardrails Status: {{ if .Values.guardrails.enabled }}🛡️  Active (promptGuard on {{ .Values.gatewayName }}){{ else }}⚪ Off{{ end }}
 ===============================================================================

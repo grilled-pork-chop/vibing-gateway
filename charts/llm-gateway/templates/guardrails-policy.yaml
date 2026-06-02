@@ -1,0 +1,79 @@
+{{- /*
+AgentgatewayPolicy — LLM guardrails.
+Attaches spec.backend.ai.promptGuard to the Gateway, so it applies to every AI backend reached
+through it (both the dedicated /<namespace>/<release>/v1 routes and the BBR global /v1 fanout).
+It only masks/rejects/enriches prompts and responses — routing and InferencePool selection are
+untouched, so standard inference keeps working. Mirrors the bbr-policy.yaml attachment pattern.
+
+promptGuard.request items each require exactly one guard kind (regex|webhook|openAIModeration|
+bedrockGuardrails|googleModelArmor) and the list must be non-empty, so the whole promptGuard block
+is only rendered when at least one request guard is enabled.
+*/ -}}
+{{- if .Values.guardrails.enabled }}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: {{ .Values.gatewayName }}-guardrails
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+  backend:
+    ai:
+      {{- with .Values.guardrails.systemPrompt }}
+      prompt:
+        prepend:
+          - role: SYSTEM
+            content: {{ . | quote }}
+      {{- end }}
+      {{- if or .Values.guardrails.pii.enabled .Values.guardrails.reject.enabled }}
+      promptGuard:
+        request:
+          {{- if .Values.guardrails.pii.enabled }}
+          # Mask (or reject) sensitive data in the client prompt.
+          - regex:
+              action: {{ .Values.guardrails.pii.action }}
+              builtins: {{ .Values.guardrails.pii.builtins | toYaml | nindent 16 }}
+          {{- end }}
+          {{- if .Values.guardrails.reject.enabled }}
+          # Reject requests whose prompt matches a banned pattern.
+          - regex:
+              action: Reject
+              matches: {{ .Values.guardrails.reject.matches | toYaml | nindent 16 }}
+              response:
+                message: {{ .Values.guardrails.reject.message | quote }}
+                statusCode: {{ .Values.guardrails.reject.statusCode }}
+          {{- end }}
+          # --- Optional request guards: uncomment + configure for your local deploy ---
+          # OpenAI Moderations API (needs an OpenAI API-key Secret referenced under policies.auth):
+          # - openAIModeration:
+          #     model: omni-moderation
+          #     policies:
+          #       auth:
+          #         passthrough: {}          # or key / secretRef
+          # Forward the prompt to your own classifier webhook (Service or Backend):
+          # - webhook:
+          #     backendRef:
+          #       name: my-guard-svc
+          #       port: 8080
+          # AWS Bedrock Guardrails:
+          # - bedrockGuardrails:
+          #     identifier: gr-xxxxxxxx
+          #     version: "1"
+          # Google Model Armor:
+          # - googleModelArmor:
+          #     ...
+        {{- if .Values.guardrails.pii.enabled }}
+        response:
+          # Mask the same sensitive data in the model's response before it reaches the client.
+          - regex:
+              action: Mask
+              builtins: {{ .Values.guardrails.pii.builtins | toYaml | nindent 16 }}
+        {{- end }}
+      {{- end }}
+{{- end }}

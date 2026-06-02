@@ -46,6 +46,38 @@ tls:
 bbr:
   enabled: true
 
+## @section Guardrails (native AgentGateway promptGuard on the LLM call)
+##
+## Renders an AgentgatewayPolicy that attaches `backend.ai.promptGuard` to the Gateway, so the
+## guardrails apply to every AI backend reached through it — both the dedicated
+## /<namespace>/<release>/v1 routes and the BBR global /v1 fanout. Routing is unaffected: the
+## policy only masks/rejects/enriches prompts and responses, it does not change route selection.
+##
+## @param guardrails.enabled Render the guardrails AgentgatewayPolicy
+## @param guardrails.systemPrompt SYSTEM message prepended to every request (omit/empty to skip)
+## @param guardrails.pii.enabled Mask (or reject) built-in sensitive-data patterns in request and response
+## @param guardrails.pii.action Action when a PII pattern matches a request — Mask or Reject
+## @param guardrails.pii.builtins Built-in patterns to match — Ssn, CreditCard, PhoneNumber, Email, CaSin
+## @param guardrails.reject.enabled Reject requests whose prompt matches a banned pattern
+## @param guardrails.reject.matches Custom regex patterns that trigger rejection
+## @param guardrails.reject.message Response body returned to the client on rejection
+## @param guardrails.reject.statusCode HTTP status returned to the client on rejection
+##
+guardrails:
+  enabled: false
+  systemPrompt: "You are a helpful assistant. Refuse unsafe or disallowed requests."
+  pii:
+    enabled: true
+    action: Mask                       # Mask | Reject
+    builtins: [Ssn, CreditCard, Email] # also: PhoneNumber, CaSin
+  reject:
+    enabled: true
+    matches:
+      - "(?i)\\bpassword\\b"
+      - "(?i)\\bsecret\\b"
+    message: "The request was rejected due to inappropriate content."
+    statusCode: 403
+
 ## @section Common Parameters
 ##
 ## @param commonLabels Labels added to every deployed resource
