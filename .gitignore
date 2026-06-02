@@ -5,3 +5,6 @@ charts/**/charts/*.tgz
 
 # Local render/scratch
 *.rendered.yaml
+
+# Offline bundle build output (`make package`) — large image archives, regenerated.
+dist/

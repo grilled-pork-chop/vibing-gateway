@@ -1,0 +1,41 @@
+# images.txt — pinned container-image manifest for the offline (airgapped) bundle.
+#
+# Single source of truth for `make images-save` / `make package`. One image ref per line;
+# blank lines and `#` comments are ignored. Versions are pinned to match the charts (see the
+# README "Versions (pinned)" table) and `make images-verify` cross-checks this list against a
+# live `helm template` of all four charts so it cannot silently drift.
+#
+# Two images below are NOT visible as a plain `image:` field in any template — keep them here
+# by hand (images-verify reconstructs them):
+#   * cert-manager-acmesolver  — referenced only in the controller's --acme-http01-solver-image arg
+#   * agentgateway (data plane) — injected via AGW_PROXY_IMAGE_REGISTRY/REPOSITORY env, spawned
+#                                 per-Gateway at runtime; tag defaults to the chart appVersion.
+
+# ── Platform (always required) ───────────────────────────────────────────────────────────────
+# cert-manager (foundation)
+quay.io/jetstack/cert-manager-controller:v1.17.0
+quay.io/jetstack/cert-manager-webhook:v1.17.0
+quay.io/jetstack/cert-manager-cainjector:v1.17.0
+quay.io/jetstack/cert-manager-startupapicheck:v1.17.0
+quay.io/jetstack/cert-manager-acmesolver:v1.17.0
+# agentgateway (control-plane): controller + per-Gateway data-plane proxy
+cr.agentgateway.dev/controller:v1.2.1
+cr.agentgateway.dev/agentgateway:v1.2.1
+# KServe LLMInferenceService controller + storage-initializer (control-plane)
+kserve/llmisvc-controller:v0.19.0-rc0
+kserve/storage-initializer:v0.19.0-rc0
+# llm-d runtime images referenced by the KServe LLMInferenceServiceConfigs (control-plane)
+ghcr.io/llm-d/llm-d-cuda:v0.6.0
+ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1
+ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1
+
+# ── Model serving (model-server) ──────────────────────────────────────────────────────────────
+# CPU path — values-local.yaml (kind / no-GPU)
+quay.io/pierdipi/vllm-cpu:latest
+# GPU path — values-prod.yaml (vLLM on GPU nodes)
+docker.io/vllm/vllm-openai:v0.19.1
+
+# ── kind node image (only for the kind-on-offline-host install path) ────────────────────────────
+# Matches `kind v0.31.x`; override with `make ... KIND_NODE_IMAGE=kindest/node:vX.Y.Z`.
+kindest/node:v1.35.1
