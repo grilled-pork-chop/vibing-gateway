@@ -1,0 +1,69 @@
+{{- /*
+models-aggregator — serves the unified OpenAI-compatible GET /v1/models. It discovers every model
+on the gateway (in-cluster KServe LLMInferenceServices + external slurm-models routes) via the
+Kubernetes API and returns them as one OpenAI model list. Deploy-once, gated on modelsEndpoint.enabled.
+Pairs with -service.yaml, -rbac.yaml, and the Exact /v1/models -route.yaml.
+*/ -}}
+{{- if .Values.modelsEndpoint.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-aggregator
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-aggregator
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "llm-gateway.modelsAggregator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "llm-gateway.labels" . | nindent 8 }}
+        app.kubernetes.io/component: models-aggregator
+    spec:
+      serviceAccountName: {{ include "llm-gateway.modelsAggregator.name" . }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: aggregator
+          image: {{ include "llm-gateway.modelsAggregator.image" . }}
+          imagePullPolicy: {{ .Values.modelsEndpoint.image.pullPolicy }}
+          env:
+            - { name: AGG_LISTEN_ADDR,          value: ":8080" }
+            - { name: PUBLISHER_PREFIX,         value: {{ .Values.modelsEndpoint.publisherPrefix | quote }} }
+            - { name: BACKEND_PORT,             value: {{ .Values.modelsEndpoint.backendPort | quote }} }
+            - { name: REQUEST_TIMEOUT_SECONDS,  value: {{ .Values.modelsEndpoint.requestTimeoutSeconds | quote }} }
+            - { name: REFRESH_INTERVAL_SECONDS, value: {{ .Values.modelsEndpoint.refreshIntervalSeconds | quote }} }
+          ports:
+            - { name: http, containerPort: 8080, protocol: TCP }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 250m, memory: 128Mi }
+{{- end }}

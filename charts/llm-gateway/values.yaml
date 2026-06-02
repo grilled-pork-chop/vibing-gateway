@@ -78,6 +78,37 @@ guardrails:
     message: "The request was rejected due to inappropriate content."
     statusCode: 403
 
+## @section Models endpoint (unified OpenAI-compatible GET /v1/models)
+##
+## Deploys the models-aggregator: a small in-cluster service that discovers every model on the
+## gateway — in-cluster KServe LLMInferenceServices and external slurm-models routes — and serves
+## them as one OpenAI model list. An Exact-match HTTPRoute on /v1/models points at it; the Exact
+## match outranks the /v1 BBR fanout so inference routing is untouched. Each model is advertised
+## under its fully-qualified Body-Based-Routing name <publisherPrefix>/<namespace>/models/<servedName>,
+## so an id read from /v1/models can be posted straight back to /v1/chat completions.
+##
+## @param modelsEndpoint.enabled Render the models-aggregator (Deployment, Service, RBAC, HTTPRoute)
+## @param modelsEndpoint.image.registry Aggregator image registry (must match the images.txt entry)
+## @param modelsEndpoint.image.repository Aggregator image repository
+## @param modelsEndpoint.image.tag Aggregator image tag
+## @param modelsEndpoint.image.pullPolicy Aggregator image pull policy
+## @param modelsEndpoint.backendPort OpenAI port the aggregator probes on in-cluster (KServe) backends
+## @param modelsEndpoint.publisherPrefix First segment of the fully-qualified routing key
+## @param modelsEndpoint.requestTimeoutSeconds Per-backend probe timeout (unreachable backends keep their last-known-good entry)
+## @param modelsEndpoint.refreshIntervalSeconds Background poll interval that refreshes the cached /v1/models responses
+##
+modelsEndpoint:
+  enabled: true
+  image:
+    registry: ghcr.io
+    repository: llm-gateway/llm-models-aggregator
+    tag: v0.1.0
+    pullPolicy: IfNotPresent
+  backendPort: 8000
+  publisherPrefix: publishers
+  requestTimeoutSeconds: 3
+  refreshIntervalSeconds: 30
+
 ## @section Common Parameters
 ##
 ## @param commonLabels Labels added to every deployed resource

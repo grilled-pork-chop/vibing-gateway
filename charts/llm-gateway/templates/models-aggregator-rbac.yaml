@@ -1,0 +1,45 @@
+{{- /*
+RBAC for the models-aggregator. Read-only, cluster-wide discovery of the resources it lists models
+from: KServe LLMInferenceServices, the slurm-models HTTPRoutes + their AgentgatewayBackends, and
+Services (to locate in-cluster backends to probe).
+*/ -}}
+{{- if .Values.modelsEndpoint.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-aggregator
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["llminferenceservices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["agentgateway.dev"]
+    resources: ["agentgatewaybackends"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-aggregator
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "llm-gateway.modelsAggregator.name" . }}
+    namespace: {{ .Values.namespace }}
+{{- end }}

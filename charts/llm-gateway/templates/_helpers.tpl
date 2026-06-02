@@ -37,6 +37,30 @@ annotations:
 {{- end -}}
 
 {{/*
+models-aggregator resource name (Deployment / Service / ServiceAccount / RBAC / route).
+*/}}
+{{- define "llm-gateway.modelsAggregator.name" -}}
+{{- printf "%s-models-aggregator" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Pod selector labels for the models-aggregator — kept constant so the Service matches the pods.
+*/}}
+{{- define "llm-gateway.modelsAggregator.selectorLabels" -}}
+app.kubernetes.io/name: {{ .Chart.Name }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: models-aggregator
+{{- end -}}
+
+{{/*
+Fully-qualified models-aggregator image ref (must match the images.txt entry).
+*/}}
+{{- define "llm-gateway.modelsAggregator.image" -}}
+{{- $img := .Values.modelsEndpoint.image -}}
+{{- printf "%s/%s:%s" $img.registry $img.repository $img.tag -}}
+{{- end -}}
+
+{{/*
 Returns "true" if any value in .Values.listeners already declares HTTPS, so the
 Gateway template doesn't double-emit a 443 listener when TLS is enabled.
 */}}

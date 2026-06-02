@@ -13,6 +13,7 @@ optional guardrails `AgentgatewayPolicy`. Standalone chart, no dependencies.
 | `AgentgatewayPolicy` (BBR)            | `bbr.enabled` (default on) | PreRouting transform — stamps `X-Gateway-Model-Name` from the request body (no extra pod) |
 | `AgentgatewayPolicy` (guardrails)     | `guardrails.enabled`       | `backend.ai.promptGuard` on the Gateway — masks PII, rejects banned prompts, prepends a system prompt |
 | `Certificate` (cert-manager)          | `tls.enabled`              | TLS cert for the HTTPS listener, written to `tls.secretName`                              |
+| models-aggregator `Deployment`/`Service`/RBAC + `HTTPRoute` | `modelsEndpoint.enabled` (default on) | Serves the unified OpenAI `GET /v1/models` (lists KServe + slurm-models) on an Exact `/v1/models` route |
 
 KServe derives the `InferencePool`, `EndpointPicker`, and `HTTPRoute` from each
 `LLMInferenceService` — this chart does **not** create them.
@@ -45,6 +46,12 @@ Deploy a single release; every model's HTTPRoute attaches to this one Gateway.
 | `guardrails.reject.enabled`          | `true`                         | Reject requests whose prompt matches `guardrails.reject.matches`                 |
 | `guardrails.reject.matches`          | `password` / `secret`          | Custom regex patterns that trigger a rejection                                   |
 | `guardrails.reject.message` / `.statusCode` | rejection / `403`       | Response returned to the client on rejection                                     |
+| `modelsEndpoint.enabled`             | `true`                         | Render the models-aggregator + the Exact `/v1/models` HTTPRoute                  |
+| `modelsEndpoint.image.*`             | `ghcr.io/llm-gateway/llm-models-aggregator:v0.1.0` | Aggregator image (must match the `images.txt` entry)         |
+| `modelsEndpoint.backendPort`         | `8000`                         | OpenAI port the aggregator probes on in-cluster (KServe) backends                |
+| `modelsEndpoint.publisherPrefix`     | `publishers`                   | First segment of the advertised FQN `<prefix>/<ns>/models/<servedName>`          |
+| `modelsEndpoint.requestTimeoutSeconds` | `3`                          | Per-backend probe timeout (unreachable backends keep their last-known-good entry) |
+| `modelsEndpoint.refreshIntervalSeconds` | `30`                        | Background poll interval that refreshes the cached `/v1/models` responses        |
 | `commonLabels` / `commonAnnotations` | `{}`                           | Added to every resource                                                          |
 
 ## Notes
@@ -64,3 +71,13 @@ Deploy a single release; every model's HTTPRoute attaches to this one Gateway.
   PII masking, custom reject patterns, and the system prompt are active by default; OpenAI
   moderation, webhook, Bedrock Guardrails, and Google Model Armor are included as commented
   examples in `templates/guardrails-policy.yaml` (some need an external Secret/Service).
+- **Models endpoint** is **routing-neutral**: the `/v1/models` HTTPRoute uses path type `Exact`,
+  which outranks the `/v1` PathPrefix BBR fanout in Gateway API precedence, so it intercepts only
+  `GET /v1/models` and never shadows inference. The models-aggregator discovers models read-only
+  via the Kubernetes API (KServe `LLMInferenceService`s + slurm-models routes), polls each backend's
+  own `/v1/models` on `refreshIntervalSeconds`, and **caches the full response** (last-known-good)
+  in memory — `GET /v1/models` serves the merged union from cache at constant latency. Every vLLM
+  field is passed through; only each `id` is rewritten to the fully-qualified routing key, so it can
+  be POSTed straight back to the BBR `/v1` endpoint. A model whose backend is momentarily down keeps
+  its cached entry until its `LLMInferenceService`/route is removed. Build/publish the image with
+  `make aggregator-image`.

@@ -36,6 +36,11 @@ quay.io/pierdipi/vllm-cpu:latest
 # GPU path — values-prod.yaml (vLLM on GPU nodes)
 docker.io/vllm/vllm-openai:v0.19.1
 
+# ── Models endpoint (llm-gateway) ──────────────────────────────────────────────────────────────
+# models-aggregator — serves the unified OpenAI GET /v1/models. Built from ./models-aggregator
+# via `make aggregator-image`; the ref below must match charts/llm-gateway values modelsEndpoint.image.
+ghcr.io/llm-gateway/llm-models-aggregator:v0.1.0
+
 # ── kind node image (only for the kind-on-offline-host install path) ────────────────────────────
 # Matches `kind v0.31.x`; override with `make ... KIND_NODE_IMAGE=kindest/node:vX.Y.Z`.
 kindest/node:v1.35.1

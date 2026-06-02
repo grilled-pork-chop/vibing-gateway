@@ -1,0 +1,33 @@
+{{- /*
+HTTPRoute that intercepts the global OpenAI GET /v1/models and serves it from the models-aggregator.
+The path match is type Exact, which outranks the PathPrefix /v1 BBR fanout and the /<ns>/<release>
+model routes in Gateway API precedence — so it captures only GET /v1/models and never shadows
+inference traffic. Backends to a plain Service (not an AgentgatewayBackend), so it does not disturb BBR.
+*/ -}}
+{{- if .Values.modelsEndpoint.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-aggregator
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+  rules:
+    - matches:
+        - method: GET
+          path:
+            type: Exact
+            value: /v1/models
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ include "llm-gateway.modelsAggregator.name" . }}
+          port: 80
+{{- end }}

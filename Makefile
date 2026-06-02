@@ -38,11 +38,13 @@ BUNDLE          := $(DIST)/llm-platform-offline-$(BUNDLE_VERSION).tar.zst
 IMAGES_FILE     ?= images.txt
 # kind node image for the offline kind path (override to match your kind binary)
 KIND_NODE_IMAGE ?= kindest/node:v1.35.1
+# models-aggregator image — must match images.txt + charts/llm-gateway values modelsEndpoint.image
+AGG_IMAGE       ?= ghcr.io/llm-gateway/llm-models-aggregator:v0.1.0
 
 .PHONY: help tools-check kind-create kind-delete deps \
         foundation control-plane gateway model slurm install-all \
         lint template smoke port-forward port-forward-stop uninstall-all clean \
-        images-verify images-save package clean-dist
+        aggregator-image images-verify images-save package clean-dist
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*## "} /^[a-zA-Z_-]+:.*## /{printf "  \033[36m%-18s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
@@ -122,6 +124,11 @@ port-forward: ## Background port-forward of the Gateway to localhost:8080
 
 port-forward-stop: ## Kill background port-forwards
 	@pkill -f "port-forward svc/kserve-ingress-gateway" || true
+
+## ── models-aggregator image ──────────────────────────────────────────────────
+aggregator-image: ## Build + push the models-aggregator image (AGG_IMAGE=<ref>; PUSH=0 to build only)
+	docker build -t $(AGG_IMAGE) ./models-aggregator
+	@[ "$(PUSH)" = "0" ] || docker push $(AGG_IMAGE)
 
 ## ── offline (airgapped) bundle ───────────────────────────────────────────────
 ## Build a single self-contained archive (images + charts + values + docs) on a

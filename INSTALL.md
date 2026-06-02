@@ -49,6 +49,7 @@ SHA256SUMS         checksums of every file in the bundle
 | `ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1`              | control-plane                                                                          |
 | `quay.io/pierdipi/vllm-cpu:latest`                      | model-server — **CPU path** (`values-local.yaml`)                                      |
 | `docker.io/vllm/vllm-openai:v0.19.1`                    | model-server — **GPU path** (`values-prod.yaml`)                                       |
+| `ghcr.io/llm-gateway/llm-models-aggregator:v0.1.0`      | llm-gateway — models-aggregator (`/v1/models`); built with `make aggregator-image`     |
 | `kindest/node:v1.35.1`                                  | kind cluster node (Path A only)                                                        |
 
 > The last two "hidden" platform images (acmesolver, agentgateway proxy) do not appear as a

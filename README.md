@@ -109,6 +109,42 @@ When a SLURM node/port changes, edit its entry in `values/slurm-models.yaml` and
 The Gateway proxy pods must be able to reach + resolve the SLURM hosts; see
 `charts/slurm-models/README.md` for reachability/auth notes.
 
+### List models (`GET /v1/models`)
+
+The `llm-gateway` chart deploys a small **models-aggregator** (`modelsEndpoint.enabled`, on by
+default) that serves one OpenAI-compatible `/v1/models` listing **every** model on the gateway —
+both KServe `LLMInferenceService`s and the external SLURM backends — discovered live from the
+Kubernetes API (no static list to maintain). It polls each backend's own `/v1/models` in the
+background and **saves the full response**, so the listing carries all of vLLM's fields and stays
+served from cache even if a backend is briefly down:
+
+```bash
+curl -sS http://localhost:8080/v1/models | jq
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "publishers/llm-demo/models/facebook/opt-125m",
+      "object": "model",
+      "created": 1717286400,
+      "owned_by": "kserve",
+      "root": "facebook/opt-125m",
+      "max_model_len": 2048,
+      "permission": [ { "id": "modelperm-...", "object": "model_permission" } ]
+    },
+    { "id": "publishers/slurm/models/llama3-70b", "object": "model", "owned_by": "slurm", "root": "meta-llama/Llama-3-70B" }
+  ]
+}
+```
+
+Only each `id` is rewritten to the **fully-qualified routing key** — copy one straight into the
+`model` field of a `/v1/chat/completions` or `/v1/completions` request to the BBR `/v1` endpoint
+above. The aggregator image is built/published with `make aggregator-image` and pinned in
+`images.txt`.
+
 ## Versions (pinned)
 
 | Component                             | Version       |

@@ -1,0 +1,23 @@
+{{- /*
+ClusterIP Service in front of the models-aggregator pods. The /v1/models HTTPRoute (-route.yaml)
+backends to this Service on port 80.
+*/ -}}
+{{- if .Values.modelsEndpoint.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "llm-gateway.modelsAggregator.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-aggregator
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  selector:
+    {{- include "llm-gateway.modelsAggregator.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+{{- end }}
