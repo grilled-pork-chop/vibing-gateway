@@ -1,0 +1,29 @@
+{{- /*
+AgentgatewayPolicy — native body-based routing.
+Runs pre-routing in the AgentGateway proxy itself (no external ext_proc pod). Extracts
+`model` from the OpenAI JSON body and stamps X-Gateway-Model-Name so header-matched
+HTTPRoute rules can select the right InferencePool. With a single pool this is a no-op
+header; it becomes load-bearing for multi-model fanout.
+*/ -}}
+{{- if .Values.bbr.enabled }}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: {{ .Values.gatewayName }}-bbr
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+  traffic:
+    phase: PreRouting
+    transformation:
+      request:
+        set:
+          - name: X-Gateway-Model-Name
+            value: 'json(request.body).model'
+{{- end }}

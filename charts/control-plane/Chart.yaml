@@ -1,0 +1,38 @@
+apiVersion: v2
+name: control-plane
+description: >
+  Installs the LLM platform controllers, including AgentGateway
+  and the KServe LLMInferenceService controller.
+type: application
+version: 0.1.0
+appVersion: "0.19.0-rc0"
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - agentgateway
+  - kserve
+  - llminferenceservice
+  - controllers
+maintainers:
+  - name: vibing-team
+
+dependencies:
+  # AgentGateway controller + Envoy data plane; Inference Extension consumes InferencePool.
+  - name: agentgateway
+    repository: oci://cr.agentgateway.dev/charts
+    version: "v1.2.1"
+    condition: agentgateway.enabled
+  # KServe LLMInferenceService controller (generative). createGIECRDs=false (foundation owns GIE CRDs).
+  - name: kserve-llmisvc-resources
+    repository: oci://ghcr.io/kserve/charts
+    version: "v0.19.0-rc0"
+    condition: kserve-llmisvc-resources.enabled
+  # ClusterServingRuntimes / LLMInferenceServiceConfigs.
+  - name: kserve-runtime-configs
+    repository: oci://ghcr.io/kserve/charts
+    version: "v0.19.0-rc0"
+    condition: kserve-runtime-configs.enabled
+  # LeaderWorkerSet — only needed for multi-node (data/expert parallel) serving.
+  - name: lws
+    repository: oci://registry.k8s.io/lws/charts
+    version: "0.8.0"
+    condition: lws.enabled

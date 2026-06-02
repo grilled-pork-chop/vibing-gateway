@@ -1,0 +1,7 @@
+# Helm dependency archives — regenerated via `make deps` (helm dependency build) from
+# the committed Chart.lock files. Don't commit the pulled upstream chart tarballs.
+charts/*.tgz
+charts/**/charts/*.tgz
+
+# Local render/scratch
+*.rendered.yaml

@@ -1,0 +1,21 @@
+===============================================================================
+🧠 CONTROL PLANE INSTALLED: {{ .Release.Name }}
+===============================================================================
+
+The platform controllers are installed in namespace "{{ .Release.Namespace }}".
+
+1. Wait for the KServe LLMInferenceService controller to be Available:
+   $ kubectl rollout status -n {{ .Release.Namespace }} deploy/llmisvc-controller-manager --timeout=300s
+
+2. Check the AgentGateway controller:
+   $ kubectl get deploy -n {{ .Release.Namespace }} -l app.kubernetes.io/name=agentgateway
+
+3. Next — deploy the shared gateway (once), then a model:
+   $ helm upgrade -i platform-gateway ./charts/llm-gateway  -f values/values-<env>.yaml
+   $ helm upgrade -i model-opt        ./charts/model-server -f values/values-<env>.yaml --set servedModelName=facebook/opt-125m
+
+Controllers:
+  AgentGateway (Inference Extension): {{ if .Values.agentgateway.enabled }}🟢 on{{ else }}⚪ off{{ end }}
+  KServe LLMInferenceService:         {{ if index .Values "kserve-llmisvc-resources" "enabled" }}🟢 on{{ else }}⚪ off{{ end }}
+  LeaderWorkerSet (multi-node):       {{ if .Values.lws.enabled }}🟢 on{{ else }}⚪ off (single-node){{ end }}
+===============================================================================

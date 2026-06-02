@@ -1,0 +1,15 @@
+dependencies:
+- name: cert-manager
+  repository: oci://quay.io/jetstack/charts
+  version: v1.17.0
+- name: kserve-crd
+  repository: oci://ghcr.io/kserve/charts
+  version: v0.19.0-rc0
+- name: kserve-llmisvc-crd
+  repository: oci://ghcr.io/kserve/charts
+  version: v0.19.0-rc0
+- name: agentgateway-crds
+  repository: oci://cr.agentgateway.dev/charts
+  version: v1.2.1
+digest: sha256:2d29cf61e9476fa73b080ebcca8cd7431aa2f4e0b417bc32af1586051891bf40
+generated: "2026-06-02T12:02:56.219144587+02:00"

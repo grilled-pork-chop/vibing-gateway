@@ -1,0 +1,53 @@
+## values/values-prod.yaml — GPU production. SHARED overlay for all four charts.
+## See values-local.yaml for how the shared file maps onto each chart.
+##
+## Per-model (GPU path): --set servedModelName=<repo> --set modelStorage.pvc.existingClaim=<pvc>
+## Pre-seed each model's PVC out-of-band (the GPU path never pulls from HuggingFace at
+## start) — see samples/model-pvc.yaml. The cert-manager Issuer/ClusterIssuer named in
+## tls.issuerRef must already exist.
+
+## ── foundation + control-plane (Bitnami-style wrappers; consume global:) ─────────
+global:
+  imageRegistry: ""        # set to your private mirror for air-gapped installs
+  imagePullSecrets: []
+cert-manager:
+  enabled: true
+lws:
+  enabled: false
+
+## ── llm-gateway (flat) ───────────────────────────────────────────────────────────
+hostname: llm.example.com
+tls:
+  enabled: true
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  secretName: llm-gateway-tls
+bbr:
+  enabled: true
+
+## ── model-server (flat) ─────────────────────────────────────────────────────────
+gpu:
+  enabled: true          # vLLM on GPU reading a pre-seeded PVC
+  type: nvidia.com/gpu
+replicaCount: 2
+modelStorage:
+  pvc:
+    existingClaim: ""     # REQUIRED per model release — set via --set
+    subPath: "."
+vllm:
+  image:
+    repository: vllm/vllm-openai
+    tag: v0.19.1
+  args:
+    - --max-model-len=8192
+    - --gpu-memory-utilization=0.90
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 24Gi
+      cpu: "8"
+  nodeSelector: {}        # e.g. { nvidia.com/gpu.product: NVIDIA-H200 }
+  tolerations: []         # e.g. [ { key: nvidia.com/gpu, operator: Exists, effect: NoSchedule } ]
+  topologySpreadConstraints: []
+  shmSize: 8Gi

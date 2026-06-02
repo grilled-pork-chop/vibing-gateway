@@ -1,0 +1,53 @@
+{{- /*
+Gateway — one listener per item in .Values.listeners. The serving.kserve.io/gateway
+label tells KServe this is the ingress Gateway its managed HTTPRoutes attach to.
+The GatewayClass is auto-registered by the AgentGateway controller, so this chart
+does not create it. When .Values.tls.enabled is true an
+HTTPS listener is appended (unless one is already declared) and references the
+cert-manager-issued Secret named .Values.tls.secretName.
+*/ -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gatewayName }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+    serving.kserve.io/gateway: {{ .Values.gatewayName }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  gatewayClassName: {{ .Values.className }}
+  infrastructure:
+    labels:
+      serving.kserve.io/gateway: {{ .Values.gatewayName }}
+  listeners:
+    {{- range .Values.listeners }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: {{ .protocol }}
+      {{- if eq .protocol "HTTPS" }}
+      hostname: {{ $.Values.hostname }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ $.Values.tls.secretName }}
+      {{- end }}
+      allowedRoutes:
+        namespaces:
+          from: All
+    {{- end }}
+    {{- if and .Values.tls.enabled (not (include "gateway.hasHttpsListener" .)) }}
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: {{ .Values.hostname }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.tls.secretName }}
+      allowedRoutes:
+        namespaces:
+          from: All
+    {{- end }}

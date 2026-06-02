@@ -1,0 +1,149 @@
+## Global configuration overrides for the model server compute blueprint.
+
+## @section Core
+##
+## @param imageRegistry Global container registry override (applied to cpu/vllm images)
+## @param imagePullSecrets Image pull secret names as an array
+## @param gpu.enabled Main toggle: false → CPU vLLM (hf://), true → GPU vLLM (PVC)
+## @param gpu.type Accelerator resource key for GPU scheduling
+## @param fullnameOverride Override the LLMInferenceService name (default: the helm release name)
+## @param servedModelName Model name clients send and KServe serves (model.name)
+## @param hfRepo HuggingFace repo for the no-GPU path (model.uri: hf://<hfRepo>)
+## @param replicaCount Number of model-server replicas
+## @param port Container/serving port for OpenAI traffic and /metrics
+## @param podLabels Extra pod labels (kept constant across CPU/GPU so the InferencePool selector is stable)
+##
+imageRegistry: ""
+imagePullSecrets: []
+gpu:
+  enabled: false
+  type: nvidia.com/gpu
+fullnameOverride: ""
+servedModelName: facebook/opt-125m
+hfRepo: facebook/opt-125m
+replicaCount: 1
+port: 8000
+podLabels:
+  app.kubernetes.io/component: model-server
+
+## @section Router
+##
+## How KServe wires ingress for this service. Defaults to fully KServe-managed (empty
+## blocks): KServe creates the InferencePool + EndpointPicker (scheduler), the HTTPRoute
+## (route), and attaches the route to the Gateway labelled serving.kserve.io/gateway.
+## Override any field to bring-your-own, e.g.
+##   router:
+##     gateway:   { refs: [ { name: kserve-ingress-gateway, namespace: kserve } ] }
+##     route:     {}
+##     scheduler: { pool: { ref: { name: my-pool } } }
+##
+## @param router.gateway Managed Gateway ({}) or BYO gateway refs
+## @param router.route Managed HTTPRoute ({}) or BYO route spec
+## @param router.scheduler Managed InferencePool+EPP ({}) or BYO scheduler pool ref
+##
+router:
+  gateway: {}
+  route: {}
+  scheduler: {}
+
+## @section No-GPU path — privileged CPU vLLM (rendered when gpu.enabled=false)
+##
+## The CPU vLLM image needs a privileged securityContext (SYS_NICE/IPC_LOCK, Unconfined
+## seccomp). KServe's storage-initializer pulls hf:// weights to /mnt/models and the
+## LLMInferenceServiceConfig supplies the serving args.
+##
+## @param cpu.image.registry CPU vLLM image registry
+## @param cpu.image.repository CPU vLLM image repository
+## @param cpu.image.tag CPU vLLM image tag
+## @param cpu.image.pullPolicy CPU vLLM image pull policy
+## @param cpu.env Environment variables for the CPU vLLM container
+## @param cpu.securityContext Privileged securityContext required by the CPU vLLM image
+## @param cpu.resources.requests.cpu CPU request
+## @param cpu.resources.requests.memory Memory request
+## @param cpu.resources.limits.cpu CPU limit
+## @param cpu.resources.limits.memory Memory limit
+##
+cpu:
+  image:
+    registry: quay.io
+    repository: pierdipi/vllm-cpu
+    tag: latest
+    pullPolicy: IfNotPresent
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: VLLM_CPU_KVCACHE_SPACE
+      value: "1"
+    - name: OMP_NUM_THREADS
+      value: "2"
+  securityContext:
+    runAsNonRoot: false
+    privileged: true
+    allowPrivilegeEscalation: true
+    seccompProfile:
+      type: Unconfined
+    capabilities:
+      add: ["SYS_NICE", "IPC_LOCK"]
+  resources:
+    requests: { cpu: "1", memory: 2Gi }
+    limits:   { cpu: "2", memory: 6Gi }
+
+## @section GPU path — vLLM on a pre-seeded PVC (rendered when gpu.enabled=true)
+##
+## The chart never pulls from HuggingFace at start time. Seed the PVC out-of-band, then
+## point modelStorage.pvc.existingClaim at it.
+##
+## @param vllm.image.registry vLLM image registry
+## @param vllm.image.repository vLLM image repository
+## @param vllm.image.tag vLLM image tag — pin per model
+## @param vllm.image.pullPolicy vLLM image pull policy
+## @param vllm.args Argument list appended to the vLLM command (after --model=/mnt/models)
+## @param vllm.securityContext Container securityContext for the GPU path
+## @param vllm.resources.limits Container resource limits — must include the GPU resource key
+## @param vllm.nodeSelector Node label constraint to land pods on GPU nodes
+## @param vllm.tolerations Tolerations matching the GPU node taint
+## @param vllm.topologySpreadConstraints Pod spread constraints across hosts for HA
+## @param vllm.shmSize Size of the /dev/shm Memory emptyDir
+##
+vllm:
+  image:
+    registry: docker.io
+    repository: vllm/vllm-openai
+    tag: v0.19.1
+    pullPolicy: IfNotPresent
+  args:
+    - --max-model-len=8192
+    - --gpu-memory-utilization=0.90
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 24Gi
+      cpu: "8"
+  nodeSelector: {}
+  tolerations: []
+  topologySpreadConstraints: []
+  shmSize: 8Gi
+
+## @section Storage (GPU path)
+##
+## @param modelStorage.pvc.existingClaim Pre-seeded PVC mounted at /mnt/models; empty = mock://simulation render-only fallback
+## @param modelStorage.pvc.subPath Path inside the PVC that contains the model directory
+##
+modelStorage:
+  pvc:
+    existingClaim: ""
+    subPath: "."
+
+## @section Common Parameters
+##
+## @param commonLabels Labels added to every deployed resource
+## @param commonAnnotations Annotations added to every deployed resource
+##
+commonLabels: {}
+commonAnnotations: {}

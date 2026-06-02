@@ -1,0 +1,55 @@
+## Global configuration overrides for the gateway chart.
+
+## @section Gateway
+##
+## NOTE: namespace + gatewayName together MUST equal the control-plane value
+## kserve-llmisvc-resources.kserve.controller.gateway.ingressGateway.kserveGateway
+## (default kserve/kserve-ingress-gateway) — that is the Gateway the KServe-managed router
+## attaches its HTTPRoute to. Change both in lockstep.
+##
+## @param namespace Namespace where the Gateway is created — must be a namespace KServe watches for ingress
+## @param className GatewayClass name (auto-registered by the AgentGateway controller; this chart does not create it)
+## @param gatewayName Name of the Gateway; KServe-managed HTTPRoutes attach here via the serving.kserve.io/gateway label
+## @param hostname Hostname clients connect with — used by HTTPS listeners and the TLS Certificate dnsNames
+## @param listeners Listener list rendered on the Gateway (HTTP/HTTPS)
+##
+namespace: kserve
+className: agentgateway
+gatewayName: kserve-ingress-gateway
+hostname: llm.local
+listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+
+## @section TLS
+##
+## @param tls.enabled Add a 443 HTTPS listener and request a cert-manager Certificate
+## @param tls.issuerRef.name cert-manager Issuer/ClusterIssuer that signs the certificate
+## @param tls.issuerRef.kind Kind of the cert-manager issuer — typically ClusterIssuer
+## @param tls.secretName Secret cert-manager writes the cert to and the listener reads from
+##
+tls:
+  enabled: false
+  issuerRef:
+    name: selfsigned
+    kind: ClusterIssuer
+  secretName: llm-gateway-tls
+
+## @section Body-Based Router (native AgentGateway PreRouting transformation)
+##
+## @param bbr.enabled Render the AgentgatewayPolicy that extracts `model` from the OpenAI
+##   JSON body and stamps X-Gateway-Model-Name before route selection. No extra pod is
+##   deployed — the transform runs inside the AgentGateway proxy. Needed for multi-pool
+##   fanout where HTTPRoute rules match on X-Gateway-Model-Name.
+##
+bbr:
+  enabled: true
+
+## @section Common Parameters
+##
+## @param commonLabels Labels added to every deployed resource
+## @param commonAnnotations Annotations added to every deployed resource
+##
+commonLabels: {}
+commonAnnotations: {}

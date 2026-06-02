@@ -1,0 +1,27 @@
+# samples/model-pvc.yaml — example PVC for the GPU model-server path.
+#
+# The model-server chart never pulls weights from HuggingFace at start time on the GPU
+# path; it mounts a pre-seeded PVC at /mnt/models. Create and populate this claim BEFORE
+# installing a model release, then point the release at it:
+#
+#   kubectl apply -n llm-demo -f samples/model-pvc.yaml
+#   # ... run a one-off Job / kubectl cp / hf download to fill the volume ...
+#   helm upgrade -i model-llama ./charts/model-server -f values/values-prod.yaml \
+#     --set servedModelName=meta-llama/Meta-Llama-3-8B \
+#     --set modelStorage.pvc.existingClaim=model-weights \
+#     --set modelStorage.pvc.subPath=llama-3-8b
+#
+# Size and storageClassName are placeholders — set them for your cluster. One PVC can hold
+# several models in subdirectories (use modelStorage.pvc.subPath per release).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-weights
+  namespace: llm-demo
+spec:
+  accessModes:
+    - ReadWriteOnce          # ReadOnlyMany if your CSI supports it and replicas share weights
+  storageClassName: ""       # e.g. gp3 / standard-rwo — empty uses the cluster default
+  resources:
+    requests:
+      storage: 100Gi

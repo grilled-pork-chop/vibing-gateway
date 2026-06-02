@@ -1,0 +1,32 @@
+## values/values-local.yaml — kind / no-GPU. SHARED overlay for all four charts.
+##
+## Pass to each chart, e.g.:
+##   helm upgrade -i foundation     ./charts/foundation     -f values/values-local.yaml
+##   helm upgrade -i control-plane  ./charts/control-plane  -f values/values-local.yaml
+##   helm upgrade -i platform-gateway ./charts/llm-gateway  -f values/values-local.yaml
+##   helm upgrade -i model-opt      ./charts/model-server   -f values/values-local.yaml --set servedModelName=facebook/opt-125m
+##
+## Each chart reads only the keys it defines; Helm ignores the rest, so one file feeds
+## all four. Per-model name/repo go via --set on the model-server release. `namespace` is
+## intentionally unset (each chart keeps its default: llm-gateway→kserve, model-server→llm-demo).
+
+## ── foundation + control-plane (Bitnami-style wrappers; consume global:) ─────────
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+cert-manager:          # foundation — required by KServe webhooks
+  enabled: true
+lws:                   # control-plane — multi-node operator, off for single-node
+  enabled: false
+
+## ── llm-gateway (flat) ───────────────────────────────────────────────────────────
+hostname: llm.local
+tls:
+  enabled: false
+bbr:
+  enabled: true
+
+## ── model-server (flat) ─────────────────────────────────────────────────────────
+gpu:
+  enabled: false       # CPU vLLM serving hf://<hfRepo>
+replicaCount: 1

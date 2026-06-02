@@ -1,0 +1,12 @@
+# Local kind cluster: 1 control-plane + 1 worker.
+# Port maps are convenience only; the Makefile uses kubectl port-forward for access
+# (kind LoadBalancer IPs stay <pending> without cloud-provider-kind).
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+  - role: worker

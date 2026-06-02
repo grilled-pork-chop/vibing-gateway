@@ -1,0 +1,103 @@
+{{- /*
+The model server — always an LLMInferenceService. router.gateway/route/scheduler are
+left managed ({}), so KServe creates the InferencePool + EndpointPicker + HTTPRoute and
+attaches the route to the Gateway labelled serving.kserve.io/gateway.
+
+gpu.enabled=false → privileged CPU vLLM, weights pulled by KServe's storage-initializer
+from hf://<hfRepo> to /mnt/models. The LLMInferenceServiceConfig supplies the serving
+args, so the container stays minimal.
+
+gpu.enabled=true → vLLM on GPU reading a pre-seeded PVC at /mnt/models. If no
+existingClaim is set, a mock:// URI keeps the resource render-only for chart tests.
+*/ -}}
+{{- $gpu := .Values.gpu.enabled -}}
+apiVersion: serving.kserve.io/v1alpha1
+kind: LLMInferenceService
+metadata:
+  name: {{ include "model-server.fullname" . }}
+  namespace: {{ .Release.namespace }}
+  labels:
+    {{- include "model-server.labels" . | nindent 4 }}
+    app.kubernetes.io/component: model-server
+  {{- include "model-server.annotations" . | nindent 2 }}
+spec:
+  model:
+    {{- if $gpu }}
+    {{- if .Values.modelStorage.pvc.existingClaim }}
+    uri: {{ printf "pvc://%s/%s" .Values.modelStorage.pvc.existingClaim (.Values.modelStorage.pvc.subPath | default "." | trimPrefix "/") | quote }}
+    {{- else }}
+    uri: "mock://simulation"   # render-only fallback; set modelStorage.pvc.existingClaim for real serving
+    {{- end }}
+    {{- else }}
+    uri: {{ printf "hf://%s" .Values.hfRepo | quote }}
+    {{- end }}
+    name: {{ .Values.servedModelName | quote }}
+  replicas: {{ .Values.replicaCount }}
+  router:
+    {{- toYaml .Values.router | nindent 4 }}
+  template:
+    {{- if $gpu }}
+    {{- with .Values.vllm.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.vllm.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.vllm.topologySpreadConstraints }}
+    topologySpreadConstraints:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- end }}
+    containers:
+      - name: main
+        {{- if $gpu }}
+        image: {{ include "model-server.image" (dict "image" .Values.vllm.image "context" .) }}
+        imagePullPolicy: {{ .Values.vllm.image.pullPolicy }}
+        {{- with .Values.vllm.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        args:
+          - --model=/mnt/models
+          - --served-model-name={{ .Values.servedModelName }}
+          - --port={{ .Values.port }}
+          {{- range .Values.vllm.args }}
+          - {{ . | quote }}
+          {{- end }}
+        ports:
+          - { name: http,    containerPort: {{ .Values.port }}, protocol: TCP }
+          - { name: metrics, containerPort: {{ .Values.port }}, protocol: TCP }
+        startupProbe:
+          httpGet: { path: /health, port: http }
+          periodSeconds: 30
+          failureThreshold: 60      # weight load can be long
+        readinessProbe:
+          httpGet: { path: /health, port: http }
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.vllm.resources | nindent 10 }}
+        volumeMounts:
+          - { name: dshm, mountPath: /dev/shm }
+        {{- else }}
+        image: {{ include "model-server.image" (dict "image" .Values.cpu.image "context" .) }}
+        imagePullPolicy: {{ .Values.cpu.image.pullPolicy }}
+        {{- with .Values.cpu.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.cpu.env }}
+        env:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.cpu.resources | nindent 10 }}
+        {{- end }}
+    {{- if $gpu }}
+    volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: {{ .Values.vllm.shmSize }}
+    {{- end }}

@@ -1,0 +1,179 @@
+## Global configuration overrides for the control plane chart.
+
+## @section AgentGateway controller
+##
+## @param agentgateway.enabled Install the AgentGateway controller + Envoy data plane
+## @param agentgateway.inferenceExtension.enabled Enable the Gateway API Inference Extension (consumes InferencePool)
+## @param agentgateway.resources Controller CPU/memory requests and limits — also drives GOMEMLIMIT (limits.memory) and GOMAXPROCS (ceil of limits.cpu) via the Downward API; the empty chart default lets the Go runtime size itself to the whole node
+## @param agentgateway.imagePullSecrets Pull secrets for a private/air-gapped registry (top-level — this is what the deployment consumes)
+## @param agentgateway.image.registry Default image registry (inherited by the controller image)
+## @param agentgateway.image.tag Default image tag (empty → chart appVersion)
+## @param agentgateway.image.pullPolicy Default image pull policy
+## @param agentgateway.proxy.image.registry Data-plane proxy registry — MUST also be set when mirroring, or per-Gateway proxies keep pulling from the default registry
+## @param agentgateway.proxy.image.repository Data-plane proxy repository
+## @param agentgateway.proxy.image.tag Data-plane proxy tag (empty → image.tag / well-known default)
+## @param agentgateway.nodeSelector Node selector for controller placement
+## @param agentgateway.tolerations Tolerations for controller placement
+## @param agentgateway.affinity Affinity rules for controller placement
+## @param agentgateway.controller.replicaCount Controller replicas (stateless xDS; 2 for HA failover)
+## @param agentgateway.controller.priorityClassName PriorityClass to keep the control plane scheduled under pressure
+## @param agentgateway.controller.podDisruptionBudget PDB to hold availability during node drains (pairs with replicaCount)
+##
+agentgateway:
+  enabled: true
+  inferenceExtension:
+    enabled: true
+  ## Controller (control-plane xDS) sizing. resources also tunes the Go runtime:
+  ## GOMEMLIMIT←limits.memory, GOMAXPROCS←ceil(limits.cpu). Without limits the runtime
+  ## sizes itself to the whole node (deployment.yaml:82-92).
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 512Mi
+  imagePullSecrets: []
+  image:
+    registry: cr.agentgateway.dev
+    tag: ""
+    pullPolicy: IfNotPresent
+  ## Data-plane proxy image (spawned per Gateway via AGW_PROXY_IMAGE_*). When mirroring to a
+  ## private registry, set proxy.image.registry too — controller and proxy pull independently.
+  proxy:
+    image:
+      registry: ""
+      repository: agentgateway
+      tag: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  controller:
+    replicaCount: 2
+    priorityClassName: ""
+    ## minAvailable 1 with replicaCount 2 lets one pod be evicted during a drain.
+    podDisruptionBudget:
+      minAvailable: 1
+    ## ── Tier 3: autoscaling / ops — uncomment as needed (keys nest under this controller block) ──
+    # logLevel: info                       # trace|debug|info|warn|error
+    # horizontalPodAutoscaler:
+    #   minReplicas: 2
+    #   maxReplicas: 5
+    #   metrics:
+    #     - type: Resource
+    #       resource:
+    #         name: cpu
+    #         target:
+    #           type: Utilization
+    #           averageUtilization: 80
+    # verticalPodAutoscaler: {}
+  ## ── Tier 2: monitoring — uncomment if the Prometheus Operator CRDs are installed.
+  ## Creates ServiceMonitors (controller + proxy) and a Grafana dashboard ConfigMap. ──
+  # monitoring:
+  #   enabled: true
+  #   serviceMonitor:
+  #     interval: 15s
+  #     extraLabels: {}                    # e.g. release: prometheus
+  ## ── Tier 3 (cont.): scope config discovery for multi-tenant ──
+  # discoveryNamespaceSelectors: []
+
+## @section KServe LLMInferenceService controller (generative)
+##
+## createGIECRDs=false → this chart does NOT ship the GIE CRDs; the foundation chart owns
+## them (vendored, Helm-owned). One CRD owner across the stack means no dual-ownership and
+## no kubectl label/annotate hack. Requires KServe v0.19.0-rc0+ where this flag exists
+## (on v0.18.0 the GIE CRDs ship unconditionally).
+##
+## `controller.gateway.ingressGateway.kserveGateway` IS consumed by the generative path:
+## it sets `kserveIngressGateway` in the inferenceservice-config ConfigMap, which becomes
+## GlobalConfig.IngressGatewayName/Namespace — the Gateway the managed router
+## (router.gateway/route: {}) attaches its HTTPRoute to. It MUST match the Gateway the
+## llm-gateway chart creates: <llm-gateway namespace>/<llm-gateway gatewayName>.
+## (The other controller.gateway fields — deploymentMode/enableGatewayApi/className — only
+## shape the predictive InferenceService config and are unused on the generative-only path.)
+##
+## @param kserve-llmisvc-resources.enabled Install the LLMInferenceService controller
+## @param kserve-llmisvc-resources.kserve.version KServe image/version pin (must match the CRD chart)
+## @param kserve-llmisvc-resources.kserve.llmisvc.createGIECRDs Ship the GIE CRDs from this chart (false → foundation owns them)
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.replicas Controller replica count (2+ for leader-elect HA failover — the manager runs with --leader-elect)
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.imagePullPolicy Image pull policy (IfNotPresent with a pinned tag for restart determinism; chart default is Always)
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.imagePullSecrets Pull secrets for a private/air-gapped registry
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.resources Controller CPU/memory requests and limits (chart default is 100m/300Mi req=limit)
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.nodeSelector Node selector for controller placement
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.tolerations Tolerations for controller placement
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.affinity Affinity rules for controller placement
+## @param kserve-llmisvc-resources.kserve.llmisvc.controller.topologySpreadConstraints Spread controller replicas across topology domains (zones/nodes)
+## @param kserve-llmisvc-resources.kserve.controller.gateway.ingressGateway.kserveGateway <ns>/<name> of the Gateway the managed router binds to — keep in sync with the data-plane Gateway
+##
+kserve-llmisvc-resources:
+  enabled: true
+  kserve:
+    version: v0.19.0-rc0
+    llmisvc:
+      createGIECRDs: false
+      ## Controller deployment (generative path). replicas>1 gives leader-elect HA failover;
+      ## the rest surface production placement/sizing knobs. Values below are the chart
+      ## defaults except replicas (1→2) and imagePullPolicy (Always→IfNotPresent).
+      controller:
+        replicas: 2
+        imagePullPolicy: IfNotPresent
+        imagePullSecrets: []
+        resources:
+          requests:
+            cpu: 100m
+            memory: 300Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        nodeSelector: {}
+        tolerations: []
+        affinity: {}
+        topologySpreadConstraints: []
+    controller:
+      gateway:
+        ingressGateway:
+          kserveGateway: kserve/kserve-ingress-gateway
+    ## ── Tier 2: model storage — uncomment if weights are pulled from S3/MinIO/GCS rather
+    ## than OCI modelcar (enableModelcar defaults true). Feeds the storage-initializer that
+    ## hydrates the serving pods (configmap `credentials`/`storageInitializer` blocks). ──
+    # storage:
+    #   storageSpecSecretName: storage-config   # Secret holding bucket credentials
+    #   caBundleConfigMapName: ''               # ConfigMap with a private TLS bundle for model fetch
+    #   s3:
+    #     endpoint: ''                          # e.g. minio.storage.svc:9000 (leave empty for AWS S3)
+    #     region: ''
+    #     useHttps: '1'                         # '1' = https, '0' = http
+    #     verifySSL: '1'
+    #     CABundleConfigMap: ''
+    ## ── Tier 3: KEDA OTel autoscaling — uncomment only if scaling on LLM metrics via
+    ## keda-otel-scaler. Default endpoints assume KEDA runs in the `keda` namespace. ──
+    # opentelemetryCollector:
+    #   scrapeInterval: 5s
+    #   metricReceiverEndpoint: keda-otel-scaler.keda.svc:4317
+    #   metricScalerEndpoint: keda-otel-scaler.keda.svc:4318
+    # autoscaler:
+    #   scaleUpStabilizationWindowSeconds: '0'
+    #   scaleDownStabilizationWindowSeconds: '300'
+
+## @section KServe runtime configs
+##
+## @param kserve-runtime-configs.enabled Install ClusterServingRuntimes / LLMInferenceServiceConfigs
+## @param kserve-runtime-configs.kserve.version KServe version pin
+## @param kserve-runtime-configs.kserve.servingruntime.enabled Install predictive ClusterServingRuntimes (off — generative only)
+## @param kserve-runtime-configs.kserve.llmisvcConfigs.enabled Install LLMInferenceServiceConfigs (generative defaults)
+##
+kserve-runtime-configs:
+  enabled: true
+  kserve:
+    version: v0.19.0-rc0
+    servingruntime:
+      enabled: false
+    llmisvcConfigs:
+      enabled: true
+
+## @section LeaderWorkerSet (optional, multi-node)
+##
+## @param lws.enabled Install the LeaderWorkerSet operator — only for multi-node (data/expert parallel) serving
+##
+lws:
+  enabled: false

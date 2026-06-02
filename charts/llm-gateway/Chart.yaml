@@ -1,0 +1,15 @@
+apiVersion: v2
+name: llm-gateway
+description: >
+  Deploys the shared LLM ingress gateway layer, including AgentGateway routing
+  policies and optional TLS configuration.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - gateway-api
+  - agentgateway
+  - body-based-routing
+maintainers:
+  - name: vibing-team

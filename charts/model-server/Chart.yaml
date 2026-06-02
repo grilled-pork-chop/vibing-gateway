@@ -1,0 +1,15 @@
+apiVersion: v2
+name: model-server
+description: >
+  Deploys a standalone KServe LLMInferenceService workload supporting both
+  CPU-based fallback and GPU-accelerated vLLM inference engines.
+type: application
+version: 0.1.0
+appVersion: "0.19.0-rc0"
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - vllm
+  - kserve
+  - llminferenceservice
+maintainers:
+  - name: vibing-team

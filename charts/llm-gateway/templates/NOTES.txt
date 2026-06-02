@@ -1,0 +1,21 @@
+===============================================================================
+🌐 LLM INGRESS GATEWAY DEPLOYED
+===============================================================================
+
+1. Get the Ingress Entrypoint Address:
+   Depending on your provider, fetch the external IP or local node port:
+   $ kubectl get gateway {{ .Values.gatewayName }} -n {{ .Values.namespace }}
+
+2. Test the Body-Based Router (BBR):
+   Send an OpenAI-compatible request targeting your gateway host ({{ .Values.hostname }}).
+   The Body-Based Router reads the JSON payload and pipes it to the right server:
+
+   $ curl -X POST http://{{ .Values.hostname }}/v1/chat/completions \
+       -H "Content-Type: application/json" \
+       -d '{
+         "model": "facebook/opt-125m",
+         "messages": [{"role": "user", "content": "Hello LLM Gateway!"}]
+       }'
+
+TLS Status: {{ if .Values.tls.enabled }}🔒 Enabled (Secret: {{ .Values.tls.secretName }}){{ else }}⚠️  Disabled (HTTP Only){{ end }}
+===============================================================================

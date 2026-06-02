@@ -1,0 +1,19 @@
+===============================================================================
+🚀 MODEL SERVER DISPATCHED SUCCESSFULLY: {{ .Release.Name }}
+===============================================================================
+
+1. Track Deployment Status:
+   Check if the LLM engine has finished downloading weights and is ready:
+   $ kubectl get llminferenceservice {{ include "model-server.fullname" . }} -n {{ .Release.Namespace }}
+
+2. Stream Engine Logs:
+   Watch the vLLM engine initialization and token generation live:
+   $ kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }} -c main -f
+
+3. Internal Cluster Endpoint:
+   Other microservices inside the cluster can reach this model directly at:
+   http://{{ include "model-server.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.port }}/v1
+
+Model Registry Name Configured: "{{ .Values.servedModelName }}"
+Execution Engine Mode: {{ if .Values.gpu.enabled }}🟢 NVIDIA GPU Acceleration{{ else }}🔵 HuggingFace CPU Fallback{{ end }}
+===============================================================================
