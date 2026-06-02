@@ -83,6 +83,32 @@ curl -X POST http://localhost:8080/v1/completions \
 
 ```
 
+### SLURM / external models
+
+Models served **outside the cluster** (e.g. an OpenAI-compatible vLLM on a SLURM node) join the same
+`/v1` endpoint via the `slurm-models` chart — each is a host + port + model name, no KServe involved.
+List them in `values/slurm-models.yaml` and deploy:
+
+```bash
+make slurm        # helm upgrade -i slurm-models ./charts/slurm-models -f values/slurm-models.yaml
+```
+
+Address them with their fully-qualified name (the backend rewrites it to the real model name
+upstream):
+
+```bash
+curl -X POST http://localhost:8080/v1/completions \
+     -H "Content-Type: application/json" \
+     -d '{
+        "model": "publishers/slurm/models/llama3-70b",
+        "prompt": "Who are you?"
+     }'
+```
+
+When a SLURM node/port changes, edit its entry in `values/slurm-models.yaml` and re-run `make slurm`.
+The Gateway proxy pods must be able to reach + resolve the SLURM hosts; see
+`charts/slurm-models/README.md` for reachability/auth notes.
+
 ## Versions (pinned)
 
 | Component                             | Version       |

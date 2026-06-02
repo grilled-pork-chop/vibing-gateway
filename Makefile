@@ -40,7 +40,7 @@ IMAGES_FILE     ?= images.txt
 KIND_NODE_IMAGE ?= kindest/node:v1.35.1
 
 .PHONY: help tools-check kind-create kind-delete deps \
-        foundation control-plane gateway model install-all \
+        foundation control-plane gateway model slurm install-all \
         lint template smoke port-forward port-forward-stop uninstall-all clean \
         images-verify images-save package clean-dist
 
@@ -85,6 +85,11 @@ model: tools-check ## L3b: one model-server release (MODEL=<repo> RELEASE=<name>
 	  -n $(MODEL_NS) --create-namespace \
 	  -f $(VALUES) --set servedModelName=$(MODEL)
 
+slurm: tools-check ## L3c: SLURM external-model backends (edit values/slurm-models.yaml)
+	$(HELM) upgrade -i slurm-models ./charts/slurm-models \
+	  -n $(RELEASE_NS) --create-namespace \
+	  -f values/slurm-models.yaml
+
 install-all: foundation control-plane gateway model ## Install all (gateway + one model)
 	@echo ">> platform installed. Try: make smoke    (more models: make model MODEL=… RELEASE=…)"
 
@@ -93,12 +98,14 @@ lint: ## helm lint every chart with the shared overlay
 	@for c in foundation control-plane llm-gateway model-server; do \
 	  $(HELM) lint ./charts/$$c -f $(VALUES); \
 	done
+	$(HELM) lint ./charts/slurm-models -f values/slurm-models.yaml
 
 template: ## Render every chart with the shared overlay (ENV=local|prod)
 	$(HELM) template foundation       ./charts/foundation     -f $(VALUES)
 	$(HELM) template control-plane    ./charts/control-plane  -f $(VALUES)
 	$(HELM) template platform-gateway ./charts/llm-gateway    -f $(VALUES)
 	$(HELM) template $(RELEASE)       ./charts/model-server   -f $(VALUES) --set servedModelName=$(MODEL)
+	$(HELM) template slurm-models     ./charts/slurm-models   -f values/slurm-models.yaml
 
 smoke: ## Port-forward the Gateway and hit the model (path: /$(MODEL_NS)/$(RELEASE)/...)
 	@$(KUBECTL) -n $(RELEASE_NS) port-forward svc/kserve-ingress-gateway 18080:80 >/dev/null 2>&1 & \

@@ -1,0 +1,17 @@
+## SLURM-hosted model endpoints exposed on the unified /v1 endpoint.
+##
+## This is the one place to edit when a SLURM node/port changes. After editing run `make slurm`
+## (or: helm upgrade -i slurm-models ./charts/slurm-models -n kserve -f values/slurm-models.yaml).
+##
+## Address a model from a client with its fully-qualified name, e.g.:
+##   curl -X POST http://localhost:8080/v1/completions \
+##     -H 'Content-Type: application/json' \
+##     -d '{"model":"publishers/slurm/models/llama3-70b","prompt":"Who are you?"}'
+
+gatewayName: kserve-ingress-gateway
+namespace: kserve
+publisher: slurm
+
+slurmModels:
+  - { name: llama3-70b, host: slurm-node-7.hpc.internal,  port: 8000, model: meta-llama/Llama-3-70B }
+  - { name: mixtral,    host: slurm-node-12.hpc.internal, port: 8001, model: mistralai/Mixtral-8x7B }

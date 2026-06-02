@@ -1,0 +1,18 @@
+apiVersion: v2
+name: slurm-models
+description: >
+  Proxies SLURM-hosted (out-of-cluster) OpenAI-compatible model servers through the
+  shared AgentGateway. Each list entry renders an AgentgatewayBackend + a header-matched
+  HTTPRoute, exposing the model on the unified Body-Based-Routing /v1 endpoint.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - gateway-api
+  - agentgateway
+  - body-based-routing
+  - slurm
+  - external-backend
+maintainers:
+  - name: vibing-team

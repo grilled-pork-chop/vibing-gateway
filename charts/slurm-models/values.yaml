@@ -1,0 +1,51 @@
+## Configuration for proxying SLURM-hosted models through the shared Gateway.
+
+## @section Gateway attachment
+##
+## NOTE: gatewayName + namespace MUST point at the Gateway created by the llm-gateway chart
+## (default kserve/kserve-ingress-gateway). Keeping the backend + route in the Gateway's own
+## namespace avoids needing a ReferenceGrant for the cross-namespace backendRef.
+##
+## @param gatewayName Name of the Gateway the rendered HTTPRoutes attach to
+## @param namespace Namespace where the AgentgatewayBackend + HTTPRoute are created
+##
+gatewayName: kserve-ingress-gateway
+namespace: kserve
+
+## @section Routing
+##
+## The unified /v1 endpoint routes by the JSON `model` field, which the BBR AgentgatewayPolicy
+## stamps onto X-Gateway-Model-Name. Clients address a SLURM model with its fully-qualified name
+## publishers/<publisher>/models/<name>; the backend rewrites it to the entry's real `model`
+## before forwarding upstream.
+##
+## @param publisher Publisher segment of the fully-qualified routing key
+##
+publisher: slurm
+
+## @section SLURM endpoints
+##
+## All SLURM model servers live here — edit + `helm upgrade` (or `make slurm`) to add, remove, or
+## repoint. Each entry:
+##   name   short id → resource names + default fully-qualified routing key
+##   host   SLURM node hostname or IP (must be reachable + resolvable from the Gateway pods)
+##   port   port the OpenAI-compatible server listens on
+##   model  the real model name the SLURM vLLM serves (sent upstream)
+##   fqName (optional) override the client-facing routing key; default publishers/<publisher>/models/<name>
+##
+## @param slurmModels List of SLURM-hosted model endpoints to expose on /v1
+##
+slurmModels: []
+#  - name: llama3-70b
+#    host: slurm-node-7.hpc.internal
+#    port: 8000
+#    model: meta-llama/Llama-3-70B
+#    # fqName: publishers/slurm/models/llama3-70b
+
+## @section Common Parameters
+##
+## @param commonLabels Labels added to every deployed resource
+## @param commonAnnotations Annotations added to every deployed resource
+##
+commonLabels: {}
+commonAnnotations: {}

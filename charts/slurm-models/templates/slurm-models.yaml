@@ -1,0 +1,55 @@
+{{- /*
+For each SLURM endpoint, render an AgentgatewayBackend (a direct host:port AI provider — no
+Service/Deployment/InferencePool) plus a header-matched HTTPRoute attached to the shared Gateway.
+
+The route matches on X-Gateway-Model-Name, which the BBR AgentgatewayPolicy stamps from the request
+body's `model` field, so the model joins the unified /v1 fanout. The client sends the fully-qualified
+routing key (publishers/<publisher>/models/<name>); the backend's openai.model rewrites it to the real
+served-model name before forwarding to the SLURM node.
+*/ -}}
+{{- $root := . -}}
+{{- range .Values.slurmModels }}
+{{- $fq := .fqName | default (printf "publishers/%s/models/%s" $root.Values.publisher .name) }}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: slurm-{{ .name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "slurm-models.labels" $root | nindent 4 }}
+  {{- include "slurm-models.annotations" $root | nindent 2 }}
+spec:
+  ai:
+    provider:
+      host: {{ .host | quote }}
+      port: {{ .port }}
+      openai:
+        model: {{ .model | quote }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: slurm-{{ .name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "slurm-models.labels" $root | nindent 4 }}
+  {{- include "slurm-models.annotations" $root | nindent 2 }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ $root.Values.gatewayName }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/
+          headers:
+            - name: X-Gateway-Model-Name      # set by the BBR AgentgatewayPolicy; Exact match
+              value: {{ $fq | quote }}
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: slurm-{{ .name }}
+{{- end }}
