@@ -11,7 +11,6 @@
 ## @param hfRepo HuggingFace repo for the no-GPU path (model.uri: hf://<hfRepo>)
 ## @param replicaCount Number of model-server replicas
 ## @param port Container/serving port for OpenAI traffic and /metrics
-## @param podLabels Extra pod labels (kept constant across CPU/GPU so the InferencePool selector is stable)
 ##
 imageRegistry: ""
 imagePullSecrets: []
@@ -23,8 +22,6 @@ servedModelName: facebook/opt-125m
 hfRepo: facebook/opt-125m
 replicaCount: 1
 port: 8000
-podLabels:
-  app.kubernetes.io/component: model-server
 
 ## @section Router
 ##

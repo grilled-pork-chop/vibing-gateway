@@ -45,13 +45,13 @@ spec:
           image: {{ include "llm-gateway.modelsAggregator.image" . }}
           imagePullPolicy: {{ .Values.modelsEndpoint.image.pullPolicy }}
           env:
-            - { name: AGG_LISTEN_ADDR,          value: ":8080" }
+            - { name: AGG_LISTEN_ADDR,          value: {{ printf ":%v" .Values.modelsEndpoint.port | quote }} }
             - { name: PUBLISHER_PREFIX,         value: {{ .Values.modelsEndpoint.publisherPrefix | quote }} }
             - { name: BACKEND_PORT,             value: {{ .Values.modelsEndpoint.backendPort | quote }} }
             - { name: REQUEST_TIMEOUT_SECONDS,  value: {{ .Values.modelsEndpoint.requestTimeoutSeconds | quote }} }
             - { name: REFRESH_INTERVAL_SECONDS, value: {{ .Values.modelsEndpoint.refreshIntervalSeconds | quote }} }
           ports:
-            - { name: http, containerPort: 8080, protocol: TCP }
+            - { name: http, containerPort: {{ .Values.modelsEndpoint.port }}, protocol: TCP }
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 20

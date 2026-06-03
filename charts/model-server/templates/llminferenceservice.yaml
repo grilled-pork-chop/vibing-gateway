@@ -15,7 +15,7 @@ apiVersion: serving.kserve.io/v1alpha1
 kind: LLMInferenceService
 metadata:
   name: {{ include "model-server.fullname" . }}
-  namespace: {{ .Release.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "model-server.labels" . | nindent 4 }}
     app.kubernetes.io/component: model-server
@@ -49,6 +49,10 @@ spec:
     topologySpreadConstraints:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+    {{- end }}
+    {{- with .Values.imagePullSecrets }}
+    imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
     {{- end }}
     containers:
       - name: main

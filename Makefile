@@ -111,7 +111,8 @@ template: ## Render every chart with the shared overlay (ENV=local|prod)
 
 smoke: ## Port-forward the Gateway and hit the model (path: /$(MODEL_NS)/$(RELEASE)/...)
 	@$(KUBECTL) -n $(RELEASE_NS) port-forward svc/kserve-ingress-gateway 18080:80 >/dev/null 2>&1 & \
-	  PF=$$!; sleep 3; \
+	  PF=$$!; \
+	  for i in $$(seq 1 30); do curl -s -o /dev/null http://localhost:18080/ && break || true; sleep 0.5; done; \
 	  echo ">> POST /$(MODEL_NS)/$(RELEASE)/v1/completions"; \
 	  curl -sS -X POST http://localhost:18080/$(MODEL_NS)/$(RELEASE)/v1/completions \
 	    -H 'Content-Type: application/json' \

@@ -3,6 +3,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -44,6 +45,7 @@ func envInt(key string, def int) int {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
+		slog.Warn("invalid integer env var, using default", "key", key, "value", v, "default", def)
 	}
 	return def
 }

@@ -92,6 +92,7 @@ guardrails:
 ## @param modelsEndpoint.image.repository Aggregator image repository
 ## @param modelsEndpoint.image.tag Aggregator image tag
 ## @param modelsEndpoint.image.pullPolicy Aggregator image pull policy
+## @param modelsEndpoint.port Port the aggregator listens on inside the pod (Service fronts it on 80)
 ## @param modelsEndpoint.backendPort OpenAI port the aggregator probes on in-cluster (KServe) backends
 ## @param modelsEndpoint.publisherPrefix First segment of the fully-qualified routing key
 ## @param modelsEndpoint.requestTimeoutSeconds Per-backend probe timeout (unreachable backends keep their last-known-good entry)
@@ -104,6 +105,7 @@ modelsEndpoint:
     repository: llm-gateway/llm-models-aggregator
     tag: v0.1.0
     pullPolicy: IfNotPresent
+  port: 8080
   backendPort: 8000
   publisherPrefix: publishers
   requestTimeoutSeconds: 3

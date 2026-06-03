@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/llm-gateway/models-aggregator/internal/model"
@@ -32,7 +33,9 @@ func Handler(r Reader) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": r.List()})
+		if err := json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": r.List()}); err != nil {
+			slog.Error("encode /v1/models response", "err", err)
+		}
 	})
 	return mux
 }

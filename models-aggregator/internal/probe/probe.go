@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/llm-gateway/models-aggregator/internal/model"
@@ -38,6 +39,10 @@ func (h *HTTP) Fetch(ctx context.Context, t model.Target) ([]model.Object, error
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("backend %s returned %d", t.Backend, resp.StatusCode)
+	}
 
 	var body struct {
 		Data []model.Object `json:"data"`
