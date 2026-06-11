@@ -192,7 +192,9 @@ make model            # L3b: one LLMInferenceService  (MODEL=<repo> RELEASE=<nam
   model's PVC out-of-band** (see `samples/model-pvc.yaml`), then:
   `make model ENV=prod RELEASE=<name> MODEL=<repo>` with
   `--set modelStorage.pvc.existingClaim=<pvc>`. A real `ClusterIssuer` matching
-  `values-prod.yaml`'s `tls.issuerRef` must already exist.
+  `values-prod.yaml`'s `tls.issuerRef` must already exist. For a full GPU node →
+  inference walkthrough (drivers, device plugin, taints, PVC seeding) see
+  [`GPU.md`](GPU.md).
 
 ---
 

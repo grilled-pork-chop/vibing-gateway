@@ -3,7 +3,8 @@
 A monorepo of four **standalone** Helm charts for an LLM serving platform — **AgentGateway**
 (Gateway API) + native **Body-Based Routing** + **KServe `LLMInferenceService`**. Runs locally
 on **kind** with no GPU (privileged CPU vLLM, `hf://facebook/opt-125m`); use
-`values/values-prod.yaml` (`gpu.enabled=true`) for real vLLM on GPU nodes.
+`values/values-prod.yaml` (`gpu.enabled=true`) for real vLLM on GPU nodes — see
+[`GPU.md`](GPU.md) for the full GPU node → inference walkthrough.
 
 ## Charts
 
