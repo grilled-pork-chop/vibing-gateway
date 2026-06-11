@@ -67,13 +67,15 @@ agentgateway:
     #           type: Utilization
     #           averageUtilization: 80
     # verticalPodAutoscaler: {}
-  ## ── Tier 2: monitoring — uncomment if the Prometheus Operator CRDs are installed.
-  ## Creates ServiceMonitors (controller + proxy) and a Grafana dashboard ConfigMap. ──
-  # monitoring:
-  #   enabled: true
-  #   serviceMonitor:
-  #     interval: 15s
-  #     extraLabels: {}                    # e.g. release: prometheus
+  ## ── Tier 2: monitoring — creates ServiceMonitors (controller + proxy) and a Grafana
+  ## dashboard ConfigMap. The Prometheus Operator CRDs are installed by the foundation chart
+  ## (prometheus-operator-crds) and the `monitoring` chart runs Prometheus/Grafana, so this is
+  ## safe to enable. Default off (opt-in); the shared overlays turn it on. ──
+  monitoring:
+    enabled: false
+    serviceMonitor:
+      interval: 15s
+      extraLabels: {}                    # e.g. release: prometheus
   ## ── Tier 3 (cont.): scope config discovery for multi-tenant ──
   # discoveryNamespaceSelectors: []
 

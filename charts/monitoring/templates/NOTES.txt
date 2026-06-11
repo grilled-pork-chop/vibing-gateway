@@ -1,0 +1,21 @@
+===============================================================================
+📈 TELEMETRY STACK READY: {{ .Release.Name }}
+===============================================================================
+
+Prometheus + Alertmanager + Grafana are installed in namespace "{{ .Release.Namespace }}".
+Per-model / per-pod request & token usage is scraped from vLLM and agentgateway.
+
+1. Open Grafana (default login: admin / prom-operator):
+   $ kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-grafana 3000:80
+   → http://localhost:3000  → dashboards "LLM Usage", "Usage by user", "Platform health"
+
+2. Open Prometheus (check scrape targets are UP):
+   $ kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-kube-prometheus-st-prometheus 9090:9090
+   → http://localhost:9090/targets
+
+3. Confirm vLLM usage metrics are flowing (after sending a completion):
+   vllm:generation_tokens_total / vllm:prompt_tokens_total / vllm:request_success_total
+
+Platform dashboards/alerts shipped by this chart: {{ if .Values.monitoring.enabled }}🟢 enabled{{ else }}⚪ disabled (monitoring.enabled=false){{ end }}
+See TELEMETRY.md for the full reference.
+===============================================================================

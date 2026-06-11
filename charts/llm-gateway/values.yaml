@@ -111,6 +111,22 @@ modelsEndpoint:
   requestTimeoutSeconds: 3
   refreshIntervalSeconds: 30
 
+## @section Per-user usage attribution (best-effort, header-based)
+##
+## Renders an AgentgatewayPolicy that records/normalises a caller identity header so usage can be
+## broken down by user (the "Usage by user" Grafana dashboard). Best-effort only — the header is
+## client-supplied and spoofable; this is for visibility, NOT authentication. Off by default; the
+## shared overlays enable it. See TELEMETRY.md for how the header reaches Prometheus.
+##
+## @param usageAttribution.enabled Render the usage-attribution AgentgatewayPolicy
+## @param usageAttribution.header Identity header recorded for attribution
+## @param usageAttribution.defaultValue Value stamped when the caller omits the header (keeps the label bounded)
+##
+usageAttribution:
+  enabled: false
+  header: X-User
+  defaultValue: unknown
+
 ## @section Common Parameters
 ##
 ## @param commonLabels Labels added to every deployed resource

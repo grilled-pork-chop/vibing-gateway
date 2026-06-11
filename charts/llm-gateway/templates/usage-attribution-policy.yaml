@@ -1,0 +1,37 @@
+{{- /*
+AgentgatewayPolicy — per-user usage attribution (best-effort, header-based).
+
+Records a caller identity header (default X-User) so usage can be broken down by user in
+Prometheus/Grafana. This is NOT authentication: the header is client-supplied and spoofable;
+real enforcement still needs an AuthPolicy (see the README must-do). We normalise the header to
+a bounded value so the Prometheus label stays low-cardinality.
+
+Mechanism note: surfacing the header as a metric label vs. an access-log field depends on the
+agentgateway build — see TELEMETRY.md → "Per-user attribution". This policy guarantees the header
+is present and normalised on every request; the scrape/label wiring is configured on the gateway.
+Mirrors the bbr-policy.yaml attachment pattern. Off by default.
+*/ -}}
+{{- if .Values.usageAttribution.enabled }}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: {{ .Values.gatewayName }}-usage-attribution
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+  traffic:
+    phase: PreRouting
+    transformation:
+      request:
+        # Default the identity header when the caller omits it, keeping the attribution label
+        # bounded (verify add-if-absent semantics on your agentgateway version).
+        add:
+          - name: {{ .Values.usageAttribution.header | quote }}
+            value: {{ .Values.usageAttribution.defaultValue | quote }}
+{{- end }}

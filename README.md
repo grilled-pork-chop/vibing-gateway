@@ -160,8 +160,19 @@ These versions are dictated by **KServe `v0.19.0-rc0`** — it pins the compatib
 cert-manager, GIE, and LWS versions (GIE `v1.3.1` matches its bundled version). Gateway API +
 GIE CRDs are vendored in `charts/foundation/templates`; chart versions are pinned in each `Chart.yaml`.
 
+## Observability
+
+Telemetry ships as a fifth chart (`monitoring`): Prometheus + Alertmanager + Grafana, scraping
+vLLM and agentgateway for **per-model / per-pod / per-LLMInferenceService** request and token usage,
+with Grafana dashboards ("LLM Usage", "Usage by user", "Platform health") and `PrometheusRule`
+alerts. It is on by default in the shared overlays (one switch: `monitoring.enabled`) and installed
+in order by `make install-all`. See **[TELEMETRY.md](TELEMETRY.md)** for the full reference, the
+per-user `X-User` attribution, and how to reach Grafana/Prometheus.
+
 ## Must-do before production
-- AuthPolicy + token rate limit on the route (an open OpenAI endpoint gets scanned in days).
+- AuthPolicy + token rate limit on the route (an open OpenAI endpoint gets scanned in days). Also
+  upgrades per-user usage from best-effort header attribution to enforceable identity.
 - A real `ClusterIssuer` for TLS (`llm-gateway` `tls.issuerRef` points at one but nothing creates it).
-- Per-component `ServiceAccount`s; PDB for the EPP; `PrometheusRule` alerts + Grafana dashboards.
+- Per-component `ServiceAccount`s; PDB for the EPP. (Telemetry — `PrometheusRule` alerts + Grafana
+  dashboards — now ships in the `monitoring` chart; see [TELEMETRY.md](TELEMETRY.md).)
 - vLLM image pre-pull DaemonSet (first pod otherwise blocks on image + weight load).

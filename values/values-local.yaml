@@ -30,3 +30,20 @@ bbr:
 gpu:
   enabled: false       # CPU vLLM serving hf://<hfRepo>
 replicaCount: 1
+
+## ── telemetry (Prometheus + Grafana + Alertmanager) ──────────────────────────────
+## `monitoring.enabled` is the shared switch: it gates the vLLM PodMonitor (model-server)
+## and the dashboards/alerts (monitoring chart). agentgateway.monitoring scrapes the gateway;
+## usageAttribution adds the per-user X-User header. kube-prometheus-stack tunes the bundled
+## subchart (local: ephemeral, short retention).
+monitoring:
+  enabled: true
+agentgateway:          # control-plane — gateway request metrics (ServiceMonitors + dashboard)
+  monitoring:
+    enabled: true
+usageAttribution:      # llm-gateway — per-user attribution via the X-User header
+  enabled: true
+kube-prometheus-stack: # monitoring — local overrides
+  prometheus:
+    prometheusSpec:
+      retention: 6h

@@ -32,3 +32,11 @@ dependencies:
     repository: oci://cr.agentgateway.dev/charts
     version: "v1.2.1"
     condition: agentgateway-crds.enabled
+  # Prometheus Operator CRDs (ServiceMonitor / PodMonitor / PrometheusRule / Prometheus /
+  # Alertmanager / Probe …). foundation owns ALL CRDs, so these live here — the `monitoring`
+  # chart deploys the operator + Prometheus/Grafana/Alertmanager with its own crds.enabled=false
+  # to keep a single CRD owner. CRD-only chart; resolved/locked by `make deps`.
+  - name: prometheus-operator-crds
+    repository: https://prometheus-community.github.io/helm-charts
+    version: "20.0.0"
+    condition: prometheus-operator-crds.enabled

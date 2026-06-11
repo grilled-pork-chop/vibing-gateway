@@ -137,6 +137,35 @@ modelStorage:
     existingClaim: ""
     subPath: "."
 
+## @section Telemetry (vLLM metrics scrape)
+##
+## Renders a PodMonitor so Prometheus scrapes each vLLM pod's /metrics (the `metrics` port).
+## vLLM exports per-model request/token/latency series (vllm:*), giving usage by model / pod /
+## LLMInferenceService once relabeled. `monitoring.enabled` is the shared platform telemetry
+## switch (the same key gates the monitoring chart's dashboards/alerts), so one overlay flag
+## turns the whole stack on/off. Needs the PodMonitor CRD (foundation) + the monitoring chart.
+##
+## @param monitoring.enabled Render the vLLM PodMonitor (shared telemetry switch)
+## @param monitoring.interval Scrape interval
+## @param monitoring.podMonitor.selector Label selector for the KServe-created vLLM pods (CONFIRM on a live cluster)
+## @param monitoring.podMonitor.relabelings Target relabelings — surface llm_inference_service from a pod label
+## @param monitoring.podMonitor.metricRelabelings Metric relabelings — map vLLM's model_name → model
+##
+monitoring:
+  enabled: true
+  interval: 15s
+  podMonitor:
+    selector:
+      matchExpressions:
+        - { key: serving.kserve.io/llminferenceservice, operator: Exists }
+    relabelings:
+      - sourceLabels: [__meta_kubernetes_pod_label_serving_kserve_io_llminferenceservice]
+        targetLabel: llm_inference_service
+    metricRelabelings:
+      - sourceLabels: [model_name]
+        targetLabel: model
+        action: replace
+
 ## @section Common Parameters
 ##
 ## @param commonLabels Labels added to every deployed resource

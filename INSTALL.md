@@ -1,9 +1,9 @@
 # Offline / airgapped install
 
-This bundle installs the whole LLM serving platform (four Helm charts: `foundation`,
-`control-plane`, `llm-gateway`, `model-server`) into an environment with **no internet
-access**. Everything needed — container images, charts, subchart dependencies, values, and
-this runbook — ships in a single archive.
+This bundle installs the whole LLM serving platform (five Helm charts: `foundation`,
+`control-plane`, `monitoring`, `llm-gateway`, `model-server`) into an environment with **no
+internet access**. Everything needed — container images, charts, subchart dependencies, values,
+and this runbook — ships in a single archive.
 
 The charts already vendor their subchart `.tgz` dependencies under `charts/*/charts/`, so the
 chart side is fully self-contained: **no `helm repo add` / `helm dependency update` is needed
@@ -17,7 +17,7 @@ which is what `images.tar` provides.
 After extracting `llm-platform-offline-<date>.tar.zst` you get:
 
 ```
-charts/            four charts + vendored subchart .tgz (cert-manager, agentgateway, kserve, lws)
+charts/            five charts + vendored subchart .tgz (cert-manager, agentgateway, kserve, lws, kube-prometheus-stack)
 values/            values-local.yaml (CPU/kind) and values-prod.yaml (GPU)
 samples/           model-pvc.yaml (GPU weight PVC example)
 manual/            step-by-step component notes
@@ -182,6 +182,7 @@ The canonical order (what `make install-all` does) is:
 ```bash
 make foundation       # L1: cert-manager + all CRDs (--wait)
 make control-plane    # L2: agentgateway + KServe llmisvc controllers (--wait)
+make monitoring       # L2b: Prometheus + Alertmanager + Grafana + dashboards/alerts (deploy once)
 make gateway          # L3a: shared Gateway + TLS + BBR policy (deploy once)
 make model            # L3b: one LLMInferenceService  (MODEL=<repo> RELEASE=<name>)
 ```

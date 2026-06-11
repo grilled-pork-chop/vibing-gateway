@@ -51,3 +51,48 @@ vllm:
   tolerations: []         # e.g. [ { key: nvidia.com/gpu, operator: Exists, effect: NoSchedule } ]
   topologySpreadConstraints: []
   shmSize: 8Gi
+
+## ── telemetry (Prometheus + Grafana + Alertmanager) ──────────────────────────────
+## Same shared switches as local; prod adds persistent storage, longer retention, resource
+## limits, and the real-cluster control-plane scrapes. Point Alertmanager at a real receiver
+## (Slack/PagerDuty/etc.) via kube-prometheus-stack.alertmanager.config before going live.
+monitoring:
+  enabled: true
+agentgateway:
+  monitoring:
+    enabled: true
+usageAttribution:
+  enabled: true
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      retentionSize: "45GB"
+      resources:
+        requests: { cpu: 500m, memory: 2Gi }
+        limits:   { memory: 4Gi }
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+  alertmanager:
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+  grafana:
+    persistence:
+      enabled: true
+      size: 5Gi
+  # Real cluster — scrape the control-plane components kind doesn't expose.
+  kubeControllerManager: { enabled: true }
+  kubeScheduler: { enabled: true }
+  kubeProxy: { enabled: true }
+  kubeEtcd: { enabled: true }

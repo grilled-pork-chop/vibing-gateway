@@ -1,0 +1,42 @@
+{{- /*
+PodMonitor for the vLLM workload pods. KServe — not this chart — creates the pods from the
+LLMInferenceService, so we select them with a PodMonitor (label selector + namespace) rather
+than a Service. The container already declares a named `metrics` port (llminferenceservice.yaml).
+
+Per-pod is intrinsic (each pod is a target → `pod` label). Per-model comes from vLLM's own
+`model_name` metric label (relabeled to `model`); per-LLMInferenceService from a pod label.
+Gated on monitoring.enabled — needs the PodMonitor CRD (foundation) + a running operator.
+
+IMPORTANT: the selector + the llm_inference_service relabel source are KServe-owned labels.
+Confirm them on a live cluster before relying on them:
+  kubectl -n {{ .Release.Namespace }} get pod -l serving.kserve.io/llminferenceservice --show-labels
+*/ -}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "model-server.fullname" . }}-vllm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "model-server.labels" . | nindent 4 }}
+    app.kubernetes.io/component: model-server
+  {{- include "model-server.annotations" . | nindent 2 }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    {{- toYaml .Values.monitoring.podMonitor.selector | nindent 4 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.monitoring.interval }}
+      {{- with .Values.monitoring.podMonitor.relabelings }}
+      relabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.monitoring.podMonitor.metricRelabelings }}
+      metricRelabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -41,6 +41,19 @@ docker.io/vllm/vllm-openai:v0.19.1
 # via `make aggregator-image`; the ref below must match charts/llm-gateway values modelsEndpoint.image.
 ghcr.io/llm-gateway/llm-models-aggregator:v0.1.0
 
+# ── Telemetry (monitoring) ──────────────────────────────────────────────────────────────────────
+# kube-prometheus-stack v75.6.0 — Prometheus + Alertmanager + Grafana + operator + add-ons.
+# Tags TRACK THE PINNED CHART VERSION: after `make deps`, run `make images-verify` (now renders the
+# monitoring chart too) and reconcile any drift here. The refs below are the chart's defaults.
+quay.io/prometheus-operator/prometheus-operator:v0.83.0
+quay.io/prometheus-operator/prometheus-config-reloader:v0.83.0
+quay.io/prometheus/prometheus:v3.4.1
+quay.io/prometheus/alertmanager:v0.28.1
+quay.io/prometheus/node-exporter:v1.9.1
+registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.15.0
+docker.io/grafana/grafana:12.0.1
+quay.io/kiwigrid/k8s-sidecar:1.30.3
+
 # ── kind node image (only for the kind-on-offline-host install path) ────────────────────────────
 # Matches `kind v0.31.x`; override with `make ... KIND_NODE_IMAGE=kindest/node:vX.Y.Z`.
 kindest/node:v1.35.1
