@@ -12,7 +12,7 @@ optional guardrails `AgentgatewayPolicy`. Standalone chart, no dependencies.
 | `Gateway` (gateway.networking.k8s.io) | always                     | Ingress entrypoint on the `agentgateway` GatewayClass; KServe routes attach here          |
 | `AgentgatewayPolicy` (BBR)            | `bbr.enabled` (default on) | PreRouting transform — stamps `X-Gateway-Model-Name` from the request body (no extra pod) |
 | `AgentgatewayPolicy` (guardrails)     | `guardrails.enabled`       | `backend.ai.promptGuard` on the Gateway — masks PII, rejects banned prompts, prepends a system prompt |
-| `AgentgatewayPolicy` (auth)           | `auth.enabled`             | `spec.traffic.jwtAuthentication` on the Gateway — requires a valid IdP-issued bearer JWT on every route (+ optional Backend/BackendTLSPolicy for the JWKS) |
+| `AgentgatewayPolicy` (auth)           | `auth.enabled`             | `spec.traffic.apiKeyAuthentication` on the Gateway — requires a valid API key (from an out-of-band Secret) on every route |
 | `Certificate` (cert-manager)          | `tls.enabled`              | TLS cert for the HTTPS listener, written to `tls.secretName`                              |
 | models-aggregator `Deployment`/`Service`/RBAC + `HTTPRoute` | `modelsEndpoint.enabled` (default on) | Serves the unified OpenAI `GET /v1/models` (lists KServe + slurm-models) on an Exact `/v1/models` route |
 
@@ -40,10 +40,9 @@ Deploy a single release; every model's HTTPRoute attaches to this one Gateway.
 | `tls.enabled`                        | `false`                        | Add a 443 HTTPS listener + request a cert-manager Certificate                    |
 | `tls.issuerRef.name` / `.kind`       | `selfsigned` / `ClusterIssuer` | cert-manager issuer that signs the certificate                                   |
 | `tls.secretName`                     | `llm-gateway-tls`              | Secret the cert is written to and the listener reads from                        |
-| `auth.enabled`                       | `false`                        | Render the JWT-validation AgentgatewayPolicy on the Gateway                      |
-| `auth.mode`                          | `Strict`                       | Enforcement mode — `Strict` (reject) or `Permissive` (validate, allow)          |
-| `auth.providers`                     | `[corp-idp]`                   | Accepted IdP issuers — `issuer`, `audiences`, one JWKS source, `cacheDuration`   |
-| `auth.jwksBackend.enabled`           | `false`                        | Render a Backend + BackendTLSPolicy to reach an external HTTPS JWKS via a private CA |
+| `auth.enabled`                       | `false`                        | Render the API-key AgentgatewayPolicy on the Gateway                            |
+| `auth.mode`                          | `Strict`                       | Enforcement mode — `Strict` (key required), `Optional` (validate if present), `Permissive` (never reject) |
+| `auth.secretName`                    | `llm-gateway-api-keys`         | Opaque Secret (created out-of-band) holding the valid API keys                   |
 | `bbr.enabled`                        | `true`                         | Render the Body-Based Routing AgentgatewayPolicy                                 |
 | `guardrails.enabled`                 | `false`                        | Render the guardrails AgentgatewayPolicy (promptGuard on the Gateway)            |
 | `guardrails.systemPrompt`            | safety instruction             | SYSTEM message prepended to every request (empty to skip)                        |
@@ -71,15 +70,18 @@ Deploy a single release; every model's HTTPRoute attaches to this one Gateway.
 - **Exposing on bare metal.** The AgentGateway controller provisions the data-plane Service as type
   `LoadBalancer`. On bare metal it stays `<pending>` until something assigns an external IP — set
   `infrastructure.annotations` to drive MetalLB pool/IP selection and point internal DNS at the
-  resulting IP. The full runbook (MetalLB, internal-CA `ClusterIssuer`, DNS, OIDC, and a
+  resulting IP. The full runbook (MetalLB, internal-CA `ClusterIssuer`, DNS, API keys, and a
   NodePort + external-LB fallback) is in [`docs/EXPOSE.md`](../../docs/EXPOSE.md).
-- **Auth (OIDC/JWT).** With `auth.enabled`, an `AgentgatewayPolicy` attaches
-  `spec.traffic.jwtAuthentication` to the **Gateway**, so a valid bearer JWT from the org IdP is
-  required on every route through it — `/v1/*`, the path-based `/<ns>/<release>/v1` routes, **and**
-  the `GET /v1/models` endpoint — in one place. This validates IdP-issued bearer tokens (the right
-  model for an OpenAI-compatible API); it does not run the interactive OIDC login redirect. Verify
-  the `jwtAuthentication` field names against the pinned agentgateway **v1.2.1** CRD before install
-  (see `docs/EXPOSE.md`), and stage with `auth.mode: Permissive` to avoid 401-ing all traffic.
+- **Auth (API keys).** With `auth.enabled`, an `AgentgatewayPolicy` attaches
+  `spec.traffic.apiKeyAuthentication` to the **Gateway**, so a valid API key is required on every
+  route through it — `/v1/*`, the path-based `/<ns>/<release>/v1` routes, **and** the `GET /v1/models`
+  endpoint — in one place. Clients send `Authorization: Bearer <key>`, the OpenAI convention every SDK
+  and notebook already speaks. The keys live in an Opaque Secret (`auth.secretName`) you create
+  out-of-band, so they never sit in values/git; AgentGateway's API-key auth can also drive per-key
+  token budgets / usage tracking (virtual keys). Verify the `apiKeyAuthentication` field names and the
+  Secret layout against the pinned agentgateway **v1.2.1** CRD before install (see `docs/EXPOSE.md`),
+  and stage with `auth.mode: Optional` to validate without locking anyone out. For service-to-service
+  callers that already use an IdP, agentgateway also supports `jwtAuthentication` as an alternative.
 - **BBR** is a no-op header with a single model; it becomes load-bearing for multi-model
   fanout, where HTTPRoute rules match on `X-Gateway-Model-Name`.
 - **Guardrails** are opt-in and **routing-neutral**: the policy attaches `backend.ai.promptGuard`

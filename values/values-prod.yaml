@@ -34,13 +34,8 @@ tls:
   secretName: llm-gateway-tls
 auth:
   enabled: true
-  mode: Strict                         # validate-and-reject; flip to Permissive for a staged rollout
-  providers:
-    - name: corp-idp
-      issuer: https://idp.corp.internal/realms/internal           # PLACEHOLDER — your IdP issuer
-      audiences: [ llm-gateway ]                                  # PLACEHOLDER — the API audience / client-id
-      jwksUrl: https://idp.corp.internal/realms/internal/protocol/openid-connect/certs
-      cacheDuration: 5m
+  mode: Strict                         # key required; flip to Optional for a staged rollout
+  secretName: llm-gateway-api-keys     # create out-of-band before deploy — see docs/EXPOSE.md
 bbr:
   enabled: true
 

@@ -51,49 +51,29 @@ tls:
     kind: ClusterIssuer
   secretName: llm-gateway-tls
 
-## @section Auth (OIDC / JWT validation on the Gateway)
+## @section Auth (API-key authentication on the Gateway)
 ##
-## Renders an AgentgatewayPolicy attaching spec.traffic.jwtAuthentication to the Gateway, so every
+## Renders an AgentgatewayPolicy attaching spec.traffic.apiKeyAuthentication to the Gateway, so every
 ## route through it (/v1/*, the Exact /v1/models endpoint, the path-based /<ns>/<release>/v1 routes)
-## requires a valid bearer JWT issued by the org IdP (Keycloak / Entra / Okta). This is the
-## bearer-token model appropriate for an OpenAI-compatible API; it does NOT run the interactive OIDC
-## login redirect flow (that needs a GatewayExtension + Backend + BackendTLSPolicy + Secret).
+## requires a valid API key. This is the idiomatic model for an OpenAI-compatible API: clients send
+## `Authorization: Bearer <key>`, exactly what the OpenAI SDK / LangChain / notebooks already do.
 ##
-## Each provider takes exactly one JWKS source: `jwksUrl` (remote HTTPS, the common case) OR
-## `jwksBackendRef` pointing at an in-cluster Backend (enable `auth.jwksBackend` to render a Backend +
-## BackendTLSPolicy when the IdP needs a private corporate CA bundle to be trusted).
+## The keys themselves live in an Opaque Secret you create out-of-band (NOT rendered by this chart, so
+## keys never sit in values/git) — see docs/EXPOSE.md for the Secret format and rotation. AgentGateway's
+## API-key auth can also drive per-key token budgets / usage tracking (virtual keys) for cost control.
 ##
-## NOTE: the exact CRD field names (jwtAuthentication / providers / jwks / cacheDuration / mode) MUST
-## be verified against the pinned agentgateway v1.2.1 CRD before install — see docs/EXPOSE.md
-## "CRD field verification". Stage with `mode: Permissive` first to avoid 401-ing all traffic.
+## NOTE: the exact CRD field names (apiKeyAuthentication / mode / secretRef) and the Secret key layout
+## MUST be verified against the pinned agentgateway v1.2.1 CRD before install — see docs/EXPOSE.md
+## "CRD field verification". Stage with `mode: Optional` first to validate without locking anyone out.
 ##
-## @param auth.enabled Render the JWT-validation AgentgatewayPolicy on the Gateway
-## @param auth.mode Enforcement mode — Strict (reject unauthenticated) or Permissive (validate but allow)
-## @param auth.providers Accepted IdP issuers (issuer, audiences, one JWKS source, cacheDuration)
-## @param auth.jwksBackend Optional in-cluster Backend + BackendTLSPolicy for reaching an external HTTPS JWKS with a private CA
+## @param auth.enabled Render the API-key AgentgatewayPolicy on the Gateway
+## @param auth.mode Enforcement mode — Strict (key required), Optional (validate if present), Permissive (never reject)
+## @param auth.secretName Opaque Secret (created out-of-band) holding the valid API keys
 ##
 auth:
   enabled: false
-  mode: Strict                         # Strict | Permissive
-  providers:
-    - name: corp-idp
-      issuer: ""                       # e.g. https://keycloak.corp.example.com/realms/internal
-      audiences: []                    # e.g. [ llm-gateway ]
-      # Exactly one JWKS source:
-      jwksUrl: ""                      # remote JWKS URL (https://.../protocol/openid-connect/certs)
-      # jwksBackendRef:                # OR reference an in-cluster Backend (see auth.jwksBackend)
-      #   name: corp-idp-jwks
-      #   port: 443
-      # jwksPath: /protocol/openid-connect/certs
-      cacheDuration: 5m
-  # Only needed when the IdP JWKS endpoint is external HTTPS and AgentGateway must reach it through a
-  # Backend with explicit (private) TLS trust. Leave disabled when jwksUrl is publicly trusted.
-  jwksBackend:
-    enabled: false
-    name: corp-idp-jwks
-    host: ""                           # e.g. keycloak.corp.example.com
-    port: 443
-    caConfigMapRef: ""                 # ConfigMap (key ca.crt) holding the corporate CA bundle
+  mode: Strict                         # Strict | Optional | Permissive
+  secretName: llm-gateway-api-keys     # create out-of-band; see docs/EXPOSE.md
 
 ## @section Body-Based Router (native AgentGateway PreRouting transformation)
 ##
