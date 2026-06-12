@@ -25,6 +25,7 @@ monitoring:
     errorRatePercent: 5        # LLMHighErrorRate fires above this % failures over 10m
     latencyP99Seconds: 30      # LLMHighLatency fires above this e2e p99 over 10m
     queueWaiting: 20           # LLMQueueSaturation fires above this many waiting reqs over 10m
+    modelNamespace: llm-demo   # LLMNoModelPods scopes to this namespace (the model-server MODEL_NS)
   eppServiceMonitor:
     enabled: false             # opt-in; the EPP Service is KServe-derived — confirm labels first
     selector:
@@ -34,15 +35,18 @@ monitoring:
 
 ## @section kube-prometheus-stack (vendored subchart)
 ##
-## CRDs are owned by the foundation chart, so crds.enabled=false here. The selector flags
-## make Prometheus discover ServiceMonitors / PodMonitors / PrometheusRules platform-wide
-## (not just ones carrying this release's Helm labels), which is what the per-chart scrape
+## This chart OWNS the Prometheus Operator CRDs (crds.enabled=true): they are version-locked to
+## the operator shipped here, so they upgrade in lockstep when kube-prometheus-stack is bumped —
+## unlike the stable platform CRDs in `foundation`. Telemetry is also an optional, self-contained
+## release, so it carries its own CRDs (and keeps them out of foundation's near-full release).
+## The selector flags make Prometheus discover ServiceMonitors / PodMonitors / PrometheusRules
+## platform-wide (not just ones carrying this release's Helm labels), which the per-chart scrape
 ## resources rely on.
 ##
 kube-prometheus-stack:
   enabled: true
   crds:
-    enabled: false
+    enabled: true
 
   prometheus:
     prometheusSpec:

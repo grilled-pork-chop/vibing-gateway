@@ -72,16 +72,16 @@ foundation: tools-check ## L1: cert-manager + CRDs (--wait: cert-manager Ready, 
 	  -n $(RELEASE_NS) --create-namespace --wait --timeout 600s \
 	  -f $(VALUES)
 
+monitoring: tools-check ## L1b: telemetry — Prometheus + Alertmanager + Grafana + dashboards/alerts (owns its CRDs; before control-plane)
+	$(HELM) upgrade -i monitoring ./charts/monitoring \
+	  -n $(RELEASE_NS) --create-namespace --wait --timeout 600s \
+	  -f $(VALUES)
+
 control-plane: tools-check ## L2: agentgateway + KServe llmisvc controllers (--wait: controller Available)
 	$(HELM) upgrade -i control-plane ./charts/control-plane \
 	  -n $(RELEASE_NS) --create-namespace --wait --timeout 600s \
 	  -f $(VALUES)
 	$(KUBECTL) -n $(RELEASE_NS) rollout status deploy/llmisvc-controller-manager --timeout=300s
-
-monitoring: tools-check ## L2b: telemetry — Prometheus + Alertmanager + Grafana + dashboards/alerts (deploy once)
-	$(HELM) upgrade -i monitoring ./charts/monitoring \
-	  -n $(RELEASE_NS) --create-namespace \
-	  -f $(VALUES)
 
 gateway: tools-check ## L3a: shared ingress — Gateway + TLS cert + BBR policy (deploy once)
 	$(HELM) upgrade -i platform-gateway ./charts/llm-gateway \
@@ -98,7 +98,7 @@ slurm: tools-check ## L3c: SLURM external-model backends (edit values/slurm-mode
 	  -n $(RELEASE_NS) --create-namespace \
 	  -f values/slurm-models.yaml
 
-install-all: foundation control-plane monitoring gateway model ## Install all (telemetry + gateway + one model)
+install-all: foundation monitoring control-plane gateway model ## Install all (telemetry + gateway + one model)
 	@echo ">> platform installed. Try: make smoke    (more models: make model MODEL=… RELEASE=…)"
 
 ## ── dev helpers ──────────────────────────────────────────────────────────────
@@ -195,8 +195,8 @@ clean-dist: ## Remove the offline build output ($(DIST)/)
 uninstall-all: ## Uninstall releases in reverse order (one model shown; repeat for more)
 	-$(HELM) uninstall $(RELEASE)         -n $(MODEL_NS)
 	-$(HELM) uninstall platform-gateway   -n $(RELEASE_NS)
-	-$(HELM) uninstall monitoring         -n $(RELEASE_NS)
 	-$(HELM) uninstall control-plane      -n $(RELEASE_NS)
+	-$(HELM) uninstall monitoring         -n $(RELEASE_NS)
 	-$(HELM) uninstall foundation         -n $(RELEASE_NS)
 
 clean: uninstall-all kind-delete ## Uninstall everything and delete the cluster

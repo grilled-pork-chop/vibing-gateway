@@ -19,10 +19,9 @@ maintainers:
   - name: vibing-team
 
 dependencies:
-  # Prometheus + Alertmanager + Grafana + operator. CRDs are owned by the foundation
-  # chart (prometheus-operator-crds), so this is installed with crds.enabled=false to
-  # keep a single CRD owner. Version is resolved/locked by `make deps`; bump in lockstep
-  # with the operator-CRD pin in charts/foundation/Chart.yaml.
+  # Prometheus + Alertmanager + Grafana + operator. This chart owns the operator CRDs
+  # (values: crds.enabled=true) — they're version-locked to the operator and upgrade with
+  # it, so they ride here rather than in foundation. Version resolved/locked by `make deps`.
   - name: kube-prometheus-stack
     repository: https://prometheus-community.github.io/helm-charts
     version: "75.6.0"

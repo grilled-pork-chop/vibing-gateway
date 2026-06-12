@@ -113,19 +113,16 @@ modelsEndpoint:
 
 ## @section Per-user usage attribution (best-effort, header-based)
 ##
-## Renders an AgentgatewayPolicy that records/normalises a caller identity header so usage can be
-## broken down by user (the "Usage by user" Grafana dashboard). Best-effort only — the header is
-## client-supplied and spoofable; this is for visibility, NOT authentication. Off by default; the
-## shared overlays enable it. See TELEMETRY.md for how the header reaches Prometheus.
+## Names the caller identity header used by the "Usage by user" Grafana dashboard. Best-effort only
+## — the header is client-supplied and spoofable; this is for visibility, NOT authentication. The
+## client header already passes through the gateway untouched (no request mutation here); surfacing
+## it as a Prometheus `user` label is a gateway-side metrics setting — see TELEMETRY.md →
+## "Per-user attribution". Kept as config/documentation; no Kubernetes resource is rendered from it.
 ##
-## @param usageAttribution.enabled Render the usage-attribution AgentgatewayPolicy
-## @param usageAttribution.header Identity header recorded for attribution
-## @param usageAttribution.defaultValue Value stamped when the caller omits the header (keeps the label bounded)
+## @param usageAttribution.header Identity header used for per-user attribution
 ##
 usageAttribution:
-  enabled: false
   header: X-User
-  defaultValue: unknown
 
 ## @section Common Parameters
 ##

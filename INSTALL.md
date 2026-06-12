@@ -181,8 +181,8 @@ The canonical order (what `make install-all` does) is:
 
 ```bash
 make foundation       # L1: cert-manager + all CRDs (--wait)
+make monitoring       # L1b: Prometheus + Alertmanager + Grafana (owns its CRDs; before control-plane)
 make control-plane    # L2: agentgateway + KServe llmisvc controllers (--wait)
-make monitoring       # L2b: Prometheus + Alertmanager + Grafana + dashboards/alerts (deploy once)
 make gateway          # L3a: shared Gateway + TLS + BBR policy (deploy once)
 make model            # L3b: one LLMInferenceService  (MODEL=<repo> RELEASE=<name>)
 ```

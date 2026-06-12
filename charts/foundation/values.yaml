@@ -33,16 +33,3 @@ kserve-llmisvc-crd:
 ##
 agentgateway-crds:
   enabled: true
-
-## @section Prometheus Operator CRD chart
-##
-## CRD-only chart for the Prometheus Operator (ServiceMonitor, PodMonitor, PrometheusRule,
-## Prometheus, Alertmanager, Probe, …). foundation is the single CRD owner; the `monitoring`
-## chart installs the operator + Prometheus/Grafana/Alertmanager with crds.enabled=false.
-## Telemetry is opt-in — leave on by default, or set false on clusters that already ship
-## the operator CRDs (then the `monitoring` chart relies on those).
-##
-## @param prometheus-operator-crds.enabled Install the Prometheus Operator CRDs
-##
-prometheus-operator-crds:
-  enabled: true

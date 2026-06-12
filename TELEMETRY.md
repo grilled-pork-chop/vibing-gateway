@@ -10,18 +10,22 @@ installed, how it works, how to reach it, and how to configure it.
 
 | Piece | Where | What it is |
 | --- | --- | --- |
-| Prometheus Operator **CRDs** | `foundation` chart (`prometheus-operator-crds` dep) | `ServiceMonitor`, `PodMonitor`, `PrometheusRule`, `Prometheus`, `Alertmanager`, … — foundation owns *all* CRDs. |
-| **Prometheus + Alertmanager + Grafana + operator** | `monitoring` chart (vendors `kube-prometheus-stack`, `crds.enabled=false`) | The actual telemetry stack, plus kube-state-metrics and node-exporter. |
+| Prometheus Operator **CRDs** | `monitoring` chart (`kube-prometheus-stack`, `crds.enabled=true`) | `ServiceMonitor`, `PodMonitor`, `PrometheusRule`, `Prometheus`, `Alertmanager`, … — version-locked to the operator, so they live with it (not in `foundation`). |
+| **Prometheus + Alertmanager + Grafana + operator** | `monitoring` chart (vendors `kube-prometheus-stack`) | The actual telemetry stack, plus kube-state-metrics and node-exporter. |
 | Platform **dashboards** | `monitoring` chart (`dashboards/*.json` → ConfigMaps) | "LLM Usage", "Usage by user", "Platform health" — auto-loaded by the Grafana sidecar. |
 | Platform **alerts** | `monitoring` chart (`PrometheusRule`) | error rate / latency / queue saturation / model-down / gateway-down. |
 | vLLM **scrape** | `model-server` chart (`PodMonitor`) | scrapes every vLLM pod's `/metrics`. |
 | Gateway **scrape** | `control-plane` chart (`agentgateway.monitoring`) | agentgateway controller + proxy ServiceMonitors + a dashboard. |
 | EPP **scrape** (optional) | `monitoring` chart (`ServiceMonitor`, off by default) | KServe EndpointPicker scheduling metrics. |
-| Per-user header | `llm-gateway` chart (`AgentgatewayPolicy`) | records/normalises the `X-User` identity header. |
 
-Install order (handled by `make install-all`): `foundation → control-plane → monitoring → gateway → model`.
-The operator CRDs ship in `foundation`, so every `ServiceMonitor`/`PodMonitor`/`PrometheusRule`
-applies cleanly regardless of when the operator pod comes up.
+Install order (handled by `make install-all`): `foundation → monitoring → control-plane → gateway → model`.
+The `monitoring` release **owns the operator CRDs** and installs second (right after `foundation`),
+so every `ServiceMonitor`/`PodMonitor`/`PrometheusRule` the later charts emit applies cleanly.
+
+> Why not `foundation`? `foundation` carries the stable, slow-moving platform CRDs (Gateway API,
+> GIE, cert-manager) and is already near Helm's per-release size limit. The Prometheus Operator CRDs
+> are large *and* version-locked to the operator, so they ride with `kube-prometheus-stack` in the
+> dedicated (optional) `monitoring` release — they upgrade in lockstep when the stack is bumped.
 
 ## How it works
 
@@ -101,21 +105,24 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{"model":"publishers/llm-demo/models/facebook/opt-125m","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-The `llm-gateway` chart renders an `AgentgatewayPolicy` (`usageAttribution.enabled`) that
-normalises the header to a bounded value (callers who omit it get `X-User: unknown`), keeping the
-Prometheus label low-cardinality. The "Usage by user" dashboard then breaks usage down by `user`.
+The client header **passes through the gateway untouched** — there is no request-mutating policy
+(an earlier draft stamped a default header on every request, which would have *clobbered* real
+identities, so it was removed). The header name is recorded in `llm-gateway` values
+(`usageAttribution.header`) and consumed by the "Usage by user" dashboard, which breaks usage down
+by the `user` label.
 
 > 🔓 **This is best-effort attribution, not authentication.** The header is client-supplied and
 > spoofable. For enforceable per-user accounting, add an `AuthPolicy` (see the README must-do) so
 > identity is verified, not asserted.
 
-**Surfacing the header into Prometheus** depends on the agentgateway build: if it can attach a
-request-header value as a metric label, the "Usage by user" panels work directly off
-`agentgateway_requests_total{user=...}`. If only **access logs** can carry the header (plus the
-response token `usage`), point those panels at a logs source instead. Confirm the available
-mechanism on the pinned `agentgateway v1.2.1` when wiring this up. Either way, putting a high-
-cardinality identity on a counter is an anti-pattern — keep the set of users bounded (or move
-per-user token accounting to logs).
+**Surfacing the header into Prometheus is a gateway-side setting**, not something this repo can
+render: agentgateway must be configured to attach the request-header value as a metric label, after
+which the "Usage by user" panels work directly off `agentgateway_requests_total{user=...}`. Confirm
+that capability on the pinned `agentgateway v1.2.1`; if only **access logs** can carry the header
+(plus the response token `usage`), point those panels at a logs source instead. The missing-value →
+`unknown` default belongs in the PromQL/relabel **once the metric exists** — never by mutating the
+request. Either way, putting a high-cardinality identity on a counter is an anti-pattern — keep the
+set of users bounded (or move per-user token accounting to logs).
 
 ## How to access
 
@@ -141,7 +148,7 @@ kubectl -n kserve port-forward svc/monitoring-kube-prometheus-st-prometheus 9090
 | `monitoring.alerts.*` | monitoring | alert thresholds |
 | `monitoring.eppServiceMonitor.enabled` | monitoring | scrape the EPP (off by default) |
 | `agentgateway.monitoring.enabled` | control-plane | gateway ServiceMonitors + dashboard |
-| `usageAttribution.*` | llm-gateway | per-user `X-User` header policy |
+| `usageAttribution.header` | llm-gateway | identity header name for the "Usage by user" dashboard |
 | `kube-prometheus-stack.*` | monitoring | retention, storage, resources (subchart) |
 
 **Local vs prod** (`values/values-{local,prod}.yaml`): local runs ephemeral with 6h retention;

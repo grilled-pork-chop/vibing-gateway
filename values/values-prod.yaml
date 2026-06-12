@@ -61,8 +61,6 @@ monitoring:
 agentgateway:
   monitoring:
     enabled: true
-usageAttribution:
-  enabled: true
 kube-prometheus-stack:
   prometheus:
     prometheusSpec:

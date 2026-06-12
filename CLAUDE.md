@@ -46,7 +46,7 @@ template` of all charts — run it after changing any pinned image.
 
 | Chart | Role | Cardinality |
 | --- | --- | --- |
-| `foundation` | cert-manager + **all CRDs** (Gateway API & GIE vendored in `templates/`; kserve/agentgateway/prometheus-operator CRDs as deps) | once |
+| `foundation` | cert-manager + **all platform CRDs** (Gateway API & GIE vendored in `templates/`; kserve/agentgateway CRDs as deps) | once |
 | `control-plane` | agentgateway controller + KServe `llmisvc` controllers (+ optional LWS) | once |
 | `monitoring` | bundled telemetry: Prometheus + Alertmanager + Grafana (kube-prometheus-stack) + platform dashboards/alerts | **deploy once** |
 | `llm-gateway` | the shared `Gateway` + optional TLS cert + **BBR `AgentgatewayPolicy`** + the models-aggregator | **deploy once** |
@@ -55,7 +55,9 @@ template` of all charts — run it after changing any pinned image.
 
 `foundation`/`control-plane`/`monitoring` are **wrapper charts** (real workloads are pinned OCI/HTTP
 subcharts, vendored into `charts/*/charts/` by `make deps`). `llm-gateway`/`model-server`/`slurm-models`
-are dependency-free leaf charts. Telemetry is documented in `TELEMETRY.md`. **All charts read the same shared overlay** and each consumes only the
+are dependency-free leaf charts. Telemetry is documented in `TELEMETRY.md`. (One CRD-ownership
+exception: the Prometheus Operator CRDs live in `monitoring`, not `foundation` — they're version-
+locked to the operator and large, so they ride with `kube-prometheus-stack`.) **All charts read the same shared overlay** and each consumes only the
 keys it defines (Helm ignores the rest) — that's why one `values/values-{local,prod}.yaml` feeds all of
 them. This repo is intentionally **not** an umbrella chart: there is no root `Chart.yaml`, no
 `global`-everything, no shared lib chart. Keep the charts standalone.

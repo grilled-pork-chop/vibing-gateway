@@ -2,14 +2,14 @@
 🧱 PLATFORM FOUNDATION READY: {{ .Release.Name }}
 ===============================================================================
 
-cert-manager and all platform CRDs (Gateway API, GIE, KServe, AgentGateway,
-Prometheus Operator) are installed and Helm-owned in namespace "{{ .Release.Namespace }}".
+cert-manager and all platform CRDs (Gateway API, GIE, KServe, AgentGateway) are
+installed and Helm-owned in namespace "{{ .Release.Namespace }}".
 
 1. Verify cert-manager is Available:
    $ kubectl rollout status -n {{ .Release.Namespace }} deploy/cert-manager-webhook --timeout=120s
 
 2. Confirm the CRDs are Established:
-   $ kubectl get crd | grep -E 'gateway.networking.k8s.io|inference.networking|serving.kserve.io|agentgateway.dev|monitoring.coreos.com'
+   $ kubectl get crd | grep -E 'gateway.networking.k8s.io|inference.networking|serving.kserve.io|agentgateway.dev'
 
 3. Next — install the controllers:
    $ helm upgrade -i control-plane ./charts/control-plane -f values/values-<env>.yaml --wait

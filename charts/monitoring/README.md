@@ -11,8 +11,9 @@ make monitoring                 # ENV=local|prod
 # or: helm upgrade -i monitoring ./charts/monitoring -n kserve -f values/values-local.yaml
 ```
 
-- **CRDs** come from the `foundation` chart (`prometheus-operator-crds`); this chart sets
-  `kube-prometheus-stack.crds.enabled=false` so there is a single CRD owner.
+- **CRDs**: this chart owns the Prometheus Operator CRDs (`kube-prometheus-stack.crds.enabled=true`).
+  They're version-locked to the operator, so they upgrade in lockstep with the stack — and stay out
+  of `foundation`'s near-full release. That's why `monitoring` installs **before** `control-plane`.
 - **Scrape config** lives next to each workload: `model-server` ships a vLLM `PodMonitor`,
   `control-plane` enables agentgateway ServiceMonitors. Prometheus discovers them cluster-wide.
 - **Dashboards** in `dashboards/*.json` become ConfigMaps the Grafana sidecar auto-imports.

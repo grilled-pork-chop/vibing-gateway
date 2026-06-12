@@ -46,12 +46,13 @@ spec:
       rules:
         - alert: LLMNoModelPods
           expr: |
-            max by (namespace, deployment) (kube_deployment_status_replicas_available{deployment=~".*-kserve.*|.*llminferenceservice.*|.*-predictor.*"}) == 0
+            kube_deployment_status_replicas_available{namespace=~"{{ $a.modelNamespace }}"} == 0
+              and kube_deployment_spec_replicas{namespace=~"{{ $a.modelNamespace }}"} > 0
           for: 5m
           labels: { severity: critical }
           annotations:
             summary: "Model deployment {{`{{ $labels.deployment }}`}} has zero ready replicas"
-            description: "A served model has no available pods for 5m — inference is down."
+            description: "A served model in namespace {{`{{ $labels.namespace }}`}} has no available pods for 5m — inference is down."
         - alert: GatewayDown
           expr: absent(up{job=~".*agentgateway.*"} == 1)
           for: 5m
