@@ -5,6 +5,8 @@ The GatewayClass is auto-registered by the AgentGateway controller, so this char
 does not create it. When .Values.tls.enabled is true an
 HTTPS listener is appended (unless one is already declared) and references the
 cert-manager-issued Secret named .Values.tls.secretName.
+Any .Values.infrastructure.annotations are propagated by the controller onto the
+provisioned data-plane Service (e.g. MetalLB pool/IP selection on bare metal).
 */ -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -20,6 +22,10 @@ spec:
   infrastructure:
     labels:
       serving.kserve.io/gateway: {{ .Values.gatewayName }}
+    {{- with .Values.infrastructure.annotations }}
+    annotations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
   listeners:
     {{- range .Values.listeners }}
     - name: {{ .name }}

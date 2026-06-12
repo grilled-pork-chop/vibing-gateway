@@ -1,0 +1,88 @@
+{{- /*
+AgentgatewayPolicy — OIDC / JWT validation.
+Attaches spec.traffic.jwtAuthentication to the Gateway, so every route reached through it requires
+a valid bearer JWT issued by the org IdP — the dedicated /<namespace>/<release>/v1 routes, the BBR
+global /v1 fanout, and the Exact /v1/models endpoint are all covered by this single attachment
+(mirrors the bbr-policy.yaml / guardrails-policy.yaml targetRefs pattern).
+
+Each provider supplies exactly one JWKS source: a remote `jwksUrl` (the common case) or a
+`jwksBackendRef` pointing at an in-cluster Backend. When .Values.auth.jwksBackend.enabled is set, a
+Backend + BackendTLSPolicy are rendered below so AgentGateway can reach an external HTTPS JWKS
+endpoint whose cert is signed by a private corporate CA.
+
+NOTE: the jwtAuthentication field names are validated against the pinned agentgateway v1.2.1 CRD at
+install time — see docs/EXPOSE.md "CRD field verification". The structure (gating, targetRefs,
+range-over-providers, one-of JWKS source) is stable regardless of exact key spelling.
+*/ -}}
+{{- if .Values.auth.enabled }}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: {{ .Values.gatewayName }}-auth
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+  traffic:
+    jwtAuthentication:
+      mode: {{ .Values.auth.mode }}
+      providers:
+        {{- range .Values.auth.providers }}
+        - issuer: {{ .issuer | quote }}
+          {{- with .audiences }}
+          audiences:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          jwks:
+            {{- if .jwksUrl }}
+            url: {{ .jwksUrl | quote }}
+            {{- else if .jwksBackendRef }}
+            backendRef:
+              name: {{ .jwksBackendRef.name }}
+              port: {{ .jwksBackendRef.port }}
+            path: {{ .jwksPath | default "/protocol/openid-connect/certs" | quote }}
+            {{- end }}
+            cacheDuration: {{ .cacheDuration | default "5m" }}
+        {{- end }}
+{{- if .Values.auth.jwksBackend.enabled }}
+---
+{{- /* Backend + BackendTLSPolicy so AgentGateway can fetch the JWKS over HTTPS with a private CA. */}}
+apiVersion: agentgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: {{ .Values.auth.jwksBackend.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  static:
+    host: {{ .Values.auth.jwksBackend.host | quote }}
+    port: {{ .Values.auth.jwksBackend.port }}
+---
+apiVersion: gateway.networking.k8s.io/v1alpha3
+kind: BackendTLSPolicy
+metadata:
+  name: {{ .Values.auth.jwksBackend.name }}-tls
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-gateway.labels" . | nindent 4 }}
+  {{- include "llm-gateway.annotations" . | nindent 2 }}
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: Backend
+      name: {{ .Values.auth.jwksBackend.name }}
+  validation:
+    hostname: {{ .Values.auth.jwksBackend.host | quote }}
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: {{ .Values.auth.jwksBackend.caConfigMapRef }}
+{{- end }}
+{{- end }}

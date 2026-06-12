@@ -12,6 +12,7 @@ optional guardrails `AgentgatewayPolicy`. Standalone chart, no dependencies.
 | `Gateway` (gateway.networking.k8s.io) | always                     | Ingress entrypoint on the `agentgateway` GatewayClass; KServe routes attach here          |
 | `AgentgatewayPolicy` (BBR)            | `bbr.enabled` (default on) | PreRouting transform — stamps `X-Gateway-Model-Name` from the request body (no extra pod) |
 | `AgentgatewayPolicy` (guardrails)     | `guardrails.enabled`       | `backend.ai.promptGuard` on the Gateway — masks PII, rejects banned prompts, prepends a system prompt |
+| `AgentgatewayPolicy` (auth)           | `auth.enabled`             | `spec.traffic.jwtAuthentication` on the Gateway — requires a valid IdP-issued bearer JWT on every route (+ optional Backend/BackendTLSPolicy for the JWKS) |
 | `Certificate` (cert-manager)          | `tls.enabled`              | TLS cert for the HTTPS listener, written to `tls.secretName`                              |
 | models-aggregator `Deployment`/`Service`/RBAC + `HTTPRoute` | `modelsEndpoint.enabled` (default on) | Serves the unified OpenAI `GET /v1/models` (lists KServe + slurm-models) on an Exact `/v1/models` route |
 
@@ -35,9 +36,14 @@ Deploy a single release; every model's HTTPRoute attaches to this one Gateway.
 | `gatewayName`                        | `kserve-ingress-gateway`       | Gateway name; KServe HTTPRoutes attach via the `serving.kserve.io/gateway` label |
 | `hostname`                           | `llm.local`                    | Hostname for HTTPS listeners and the TLS Certificate dnsNames                    |
 | `listeners`                          | `[{http,80}]`                  | Listener list on the Gateway (HTTP/HTTPS)                                        |
+| `infrastructure.annotations`         | `{}`                           | Annotations propagated onto the provisioned data-plane Service (MetalLB pool/IP on bare metal; max 8) |
 | `tls.enabled`                        | `false`                        | Add a 443 HTTPS listener + request a cert-manager Certificate                    |
 | `tls.issuerRef.name` / `.kind`       | `selfsigned` / `ClusterIssuer` | cert-manager issuer that signs the certificate                                   |
 | `tls.secretName`                     | `llm-gateway-tls`              | Secret the cert is written to and the listener reads from                        |
+| `auth.enabled`                       | `false`                        | Render the JWT-validation AgentgatewayPolicy on the Gateway                      |
+| `auth.mode`                          | `Strict`                       | Enforcement mode — `Strict` (reject) or `Permissive` (validate, allow)          |
+| `auth.providers`                     | `[corp-idp]`                   | Accepted IdP issuers — `issuer`, `audiences`, one JWKS source, `cacheDuration`   |
+| `auth.jwksBackend.enabled`           | `false`                        | Render a Backend + BackendTLSPolicy to reach an external HTTPS JWKS via a private CA |
 | `bbr.enabled`                        | `true`                         | Render the Body-Based Routing AgentgatewayPolicy                                 |
 | `guardrails.enabled`                 | `false`                        | Render the guardrails AgentgatewayPolicy (promptGuard on the Gateway)            |
 | `guardrails.systemPrompt`            | safety instruction             | SYSTEM message prepended to every request (empty to skip)                        |
@@ -62,6 +68,18 @@ Deploy a single release; every model's HTTPRoute attaches to this one Gateway.
   attaches its HTTPRoute to. Change both in lockstep.
 - **TLS prerequisite.** `tls.issuerRef` must point at an Issuer/ClusterIssuer that already
   exists; this chart does not create one.
+- **Exposing on bare metal.** The AgentGateway controller provisions the data-plane Service as type
+  `LoadBalancer`. On bare metal it stays `<pending>` until something assigns an external IP — set
+  `infrastructure.annotations` to drive MetalLB pool/IP selection and point internal DNS at the
+  resulting IP. The full runbook (MetalLB, internal-CA `ClusterIssuer`, DNS, OIDC, and a
+  NodePort + external-LB fallback) is in [`docs/EXPOSE.md`](../../docs/EXPOSE.md).
+- **Auth (OIDC/JWT).** With `auth.enabled`, an `AgentgatewayPolicy` attaches
+  `spec.traffic.jwtAuthentication` to the **Gateway**, so a valid bearer JWT from the org IdP is
+  required on every route through it — `/v1/*`, the path-based `/<ns>/<release>/v1` routes, **and**
+  the `GET /v1/models` endpoint — in one place. This validates IdP-issued bearer tokens (the right
+  model for an OpenAI-compatible API); it does not run the interactive OIDC login redirect. Verify
+  the `jwtAuthentication` field names against the pinned agentgateway **v1.2.1** CRD before install
+  (see `docs/EXPOSE.md`), and stage with `auth.mode: Permissive` to avoid 401-ing all traffic.
 - **BBR** is a no-op header with a single model; it becomes load-bearing for multi-model
   fanout, where HTTPRoute rules match on `X-Gateway-Model-Name`.
 - **Guardrails** are opt-in and **routing-neutral**: the policy attaches `backend.ai.promptGuard`

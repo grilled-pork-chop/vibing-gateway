@@ -5,6 +5,11 @@
 ## Pre-seed each model's PVC out-of-band (the GPU path never pulls from HuggingFace at
 ## start) — see samples/model-pvc.yaml. The cert-manager Issuer/ClusterIssuer named in
 ## tls.issuerRef must already exist.
+##
+## Bare-metal exposure (see docs/EXPOSE.md): the hostname must resolve via INTERNAL DNS to the
+## MetalLB-assigned LoadBalancer IP; MetalLB + an IPAddressPool named to match
+## infrastructure.annotations must exist BEFORE deploy; and tls.issuerRef must point at an internal
+## CA (or DNS-01) ClusterIssuer — Let's Encrypt HTTP-01 cannot validate an internal-only DNS name.
 
 ## ── foundation + control-plane (Bitnami-style wrappers; consume global:) ─────────
 global:
@@ -16,13 +21,26 @@ lws:
   enabled: false
 
 ## ── llm-gateway (flat) ───────────────────────────────────────────────────────────
-hostname: llm.example.com
+hostname: llm.corp.internal            # PLACEHOLDER — internal FQDN; point internal DNS at the MetalLB IP
+infrastructure:
+  annotations:
+    metallb.universe.tf/address-pool: llm-gateway-pool   # must match the MetalLB IPAddressPool name
+    # metallb.universe.tf/loadBalancerIPs: 10.0.0.50      # optional pinned IP within that pool
 tls:
   enabled: true
   issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
+    name: corp-internal-ca             # PLACEHOLDER — internal CA ClusterIssuer (or DNS-01 ACME).
+    kind: ClusterIssuer                # HTTP-01 will NOT work for internal-only DNS.
   secretName: llm-gateway-tls
+auth:
+  enabled: true
+  mode: Strict                         # validate-and-reject; flip to Permissive for a staged rollout
+  providers:
+    - name: corp-idp
+      issuer: https://idp.corp.internal/realms/internal           # PLACEHOLDER — your IdP issuer
+      audiences: [ llm-gateway ]                                  # PLACEHOLDER — the API audience / client-id
+      jwksUrl: https://idp.corp.internal/realms/internal/protocol/openid-connect/certs
+      cacheDuration: 5m
 bbr:
   enabled: true
 
