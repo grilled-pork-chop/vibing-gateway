@@ -10,7 +10,7 @@ installed, how it works, how to reach it, and how to configure it.
 
 | Piece | Where | What it is |
 | --- | --- | --- |
-| Prometheus Operator **CRDs** | `monitoring` chart (`kube-prometheus-stack`, `crds.enabled=true`) | `ServiceMonitor`, `PodMonitor`, `PrometheusRule`, `Prometheus`, `Alertmanager`, … — version-locked to the operator, so they live with it (not in `foundation`). |
+| Prometheus Operator **CRDs** | `monitoring` chart (`kube-prometheus-stack`, `crds.enabled=true`) | `ServiceMonitor`, `PodMonitor`, `PrometheusRule`, `Prometheus`, `Alertmanager`, … — version-locked to the operator, so they ride with it (not in `platform-crds`). |
 | **Prometheus + Alertmanager + Grafana + operator** | `monitoring` chart (vendors `kube-prometheus-stack`) | The actual telemetry stack, plus kube-state-metrics and node-exporter. |
 | Platform **dashboards** | `monitoring` chart (`dashboards/*.json` → ConfigMaps) | "LLM Usage", "Usage by user", "Platform health" — auto-loaded by the Grafana sidecar. |
 | Platform **alerts** | `monitoring` chart (`PrometheusRule`) | error rate / latency / queue saturation / model-down / gateway-down. |
@@ -18,14 +18,16 @@ installed, how it works, how to reach it, and how to configure it.
 | Gateway **scrape** | `control-plane` chart (`agentgateway.monitoring`) | agentgateway controller + proxy ServiceMonitors + a dashboard. |
 | EPP **scrape** (optional) | `monitoring` chart (`ServiceMonitor`, off by default) | KServe EndpointPicker scheduling metrics. |
 
-Install order (handled by `make install-all`): `foundation → monitoring → control-plane → gateway → model`.
-The `monitoring` release **owns the operator CRDs** and installs second (right after `foundation`),
-so every `ServiceMonitor`/`PodMonitor`/`PrometheusRule` the later charts emit applies cleanly.
+Install order (handled by `make install-all`):
+`platform-crds → foundation → monitoring → control-plane → gateway → model`.
+The `monitoring` release **owns the operator CRDs** and installs right after `foundation`, so every
+`ServiceMonitor`/`PodMonitor`/`PrometheusRule` the later charts emit applies cleanly.
 
-> Why not `foundation`? `foundation` carries the stable, slow-moving platform CRDs (Gateway API,
-> GIE, cert-manager) and is already near Helm's per-release size limit. The Prometheus Operator CRDs
-> are large *and* version-locked to the operator, so they ride with `kube-prometheus-stack` in the
-> dedicated (optional) `monitoring` release — they upgrade in lockstep when the stack is bumped.
+> Why not the shared `platform-crds` chart? The Prometheus Operator CRDs are large *and*
+> version-locked to the operator, so — by the same rule that keeps cert-manager's CRDs in
+> `foundation` — they ride with `kube-prometheus-stack` in the dedicated (optional) `monitoring`
+> release and upgrade in lockstep when the stack is bumped. The stable, slow-moving platform CRDs
+> (Gateway API, GIE, KServe, AgentGateway) live in `platform-crds`.
 
 ## How it works
 

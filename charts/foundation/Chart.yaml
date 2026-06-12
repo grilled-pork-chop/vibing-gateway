@@ -1,34 +1,29 @@
 apiVersion: v2
 name: foundation
 description: >
-  Bootstraps LLM platform core infrastructure, including cert-manager,
-  Gateway API, GIE, and KServe llmisvc CRDs.
+  Cluster-prerequisite tier: installs cert-manager, a platform ClusterIssuer for
+  Gateway TLS, and (optionally) the LeaderWorkerSet operator for multi-node serving.
+  Platform CRDs live in the platform-crds chart — install that first.
 type: application
 version: 0.1.0
 appVersion: "0.19.0-rc0"
 kubeVersion: ">=1.30.0-0"
 keywords:
   - cert-manager
-  - gateway-api
-  - gateway-api-inference-extension
-  - kserve
-  - crds
+  - clusterissuer
+  - leaderworkerset
+  - bootstrap
 maintainers:
   - name: vibing-team
 
 dependencies:
-  # cert-manager — required by KServe webhooks and (optionally) Gateway TLS.
+  # cert-manager — required by KServe webhooks and (optionally) Gateway TLS. Owns its own CRDs.
   - name: cert-manager
     repository: oci://quay.io/jetstack/charts
     version: "v1.17.0"
     condition: cert-manager.enabled
-  # KServe LLMInferenceService CRDs (the generative path).
-  - name: kserve-llmisvc-crd
-    repository: oci://ghcr.io/kserve/charts
-    version: "v0.19.0-rc0"
-    condition: kserve-llmisvc-crd.enabled
-  # AgentGateway CRDs (AgentgatewayBackend / AgentgatewayPolicy / parameters).
-  - name: agentgateway-crds
-    repository: oci://cr.agentgateway.dev/charts
-    version: "v1.2.1"
-    condition: agentgateway-crds.enabled
+  # LeaderWorkerSet — only needed for multi-node (data/expert parallel) serving. Operator owns its CRD.
+  - name: lws
+    repository: oci://registry.k8s.io/lws/charts
+    version: "0.8.0"
+    condition: lws.enabled

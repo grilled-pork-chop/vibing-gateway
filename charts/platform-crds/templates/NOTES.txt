@@ -1,0 +1,20 @@
+===============================================================================
+🧩 PLATFORM CRDs ESTABLISHED: {{ .Release.Name }}
+===============================================================================
+
+The platform's standalone CRDs are installed and Helm-owned:
+  Gateway API (vendored):   {{ if .Values.gatewayApiCRDs.enabled }}🟢 v1.4.1{{ else }}⚪ skipped{{ end }}
+  GIE / Inference Ext.:     {{ if .Values.gieCRDs.enabled }}🟢 v1.3.1{{ else }}⚪ skipped{{ end }}
+  KServe LLMInferenceSvc:   {{ if index .Values "kserve-llmisvc-crd" "enabled" }}🟢 v0.19.0-rc0{{ else }}⚪ skipped{{ end }}
+  AgentGateway:             {{ if index .Values "agentgateway-crds" "enabled" }}🟢 v1.2.1{{ else }}⚪ skipped{{ end }}
+
+1. Confirm the CRDs are Established:
+   $ kubectl get crd | grep -E 'gateway.networking.k8s.io|inference.networking|serving.kserve.io|agentgateway.dev'
+
+2. Next — install cert-manager + the ClusterIssuer:
+   $ helm upgrade -i foundation ./charts/foundation -f values/values-<env>.yaml --wait
+
+CRD Ownership: 🔒 platform-crds owns the vendored + standalone CRDs (control-plane sets
+createGIECRDs=false). cert-manager and Prometheus Operator CRDs ride with their operators
+(foundation / monitoring) — no kubectl label/annotate hack, no dual ownership.
+===============================================================================

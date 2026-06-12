@@ -3,8 +3,9 @@
 ##
 ## Per-model (GPU path): --set servedModelName=<repo> --set modelStorage.pvc.existingClaim=<pvc>
 ## Pre-seed each model's PVC out-of-band (the GPU path never pulls from HuggingFace at
-## start) — see samples/model-pvc.yaml. The cert-manager Issuer/ClusterIssuer named in
-## tls.issuerRef must already exist.
+## start) — see samples/model-pvc.yaml. The cert-manager ClusterIssuer named in tls.issuerRef
+## must exist — either pre-created, or created by foundation's issuer.* block (set issuer.enabled
+## and fill in issuer.acme.* below).
 
 ## ── foundation + control-plane (Bitnami-style wrappers; consume global:) ─────────
 global:
@@ -12,8 +13,23 @@ global:
   imagePullSecrets: []
 cert-manager:
   enabled: true
-lws:
+lws:                   # foundation — multi-node operator
   enabled: false
+## Platform ClusterIssuer (foundation) for Gateway TLS. ACME needs a real email + a solver
+## wired to YOUR ingress/DNS, so it ships DISABLED: either fill these in and set enabled:true,
+## or pre-create a ClusterIssuer named to match tls.issuerRef.name below. `name` already matches.
+issuer:
+  enabled: false
+  name: letsencrypt-prod
+  kind: acme
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ""                          # REQUIRED before enabling
+    privateKeySecretName: letsencrypt-prod-key
+    solver:
+      http01:
+        ingress:
+          class: ""                    # e.g. your ingress class
 
 ## ── llm-gateway (flat) ───────────────────────────────────────────────────────────
 hostname: llm.example.com

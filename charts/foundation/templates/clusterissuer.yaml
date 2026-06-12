@@ -1,0 +1,36 @@
+{{- /*
+Platform ClusterIssuer — the issuer llm-gateway's Certificate (tls.issuerRef) points at,
+so Gateway TLS resolves without a manual out-of-band issuer. cert-manager (this chart's
+dependency) must be Ready first; install foundation with --wait.
+
+  issuer.kind: selfsigned  → local/dev, zero external dependencies (default).
+              ca           → sign from an in-cluster CA Secret (issuer.ca.secretName).
+              acme         → Let's Encrypt / ACME (issuer.acme.*) for real prod certs.
+*/ -}}
+{{- if .Values.issuer.enabled }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.issuer.name }}
+  labels:
+    app.kubernetes.io/name: foundation
+    app.kubernetes.io/part-of: llm-gateway
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  {{- if eq .Values.issuer.kind "selfsigned" }}
+  selfSigned: {}
+  {{- else if eq .Values.issuer.kind "ca" }}
+  ca:
+    secretName: {{ required "issuer.ca.secretName is required when issuer.kind=ca" .Values.issuer.ca.secretName }}
+  {{- else if eq .Values.issuer.kind "acme" }}
+  acme:
+    server: {{ .Values.issuer.acme.server | quote }}
+    email: {{ required "issuer.acme.email is required when issuer.kind=acme" .Values.issuer.acme.email | quote }}
+    privateKeySecretRef:
+      name: {{ .Values.issuer.acme.privateKeySecretName | default (printf "%s-acme-key" .Values.issuer.name) }}
+    solvers:
+      {{- toYaml (list .Values.issuer.acme.solver) | nindent 6 }}
+  {{- else }}
+  {{- fail (printf "issuer.kind must be one of: selfsigned, ca, acme (got %q)" .Values.issuer.kind) }}
+  {{- end }}
+{{- end }}
