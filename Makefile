@@ -1,7 +1,9 @@
 ## llm-platform — install orchestration for a local kind cluster.
 ##
-## Monorepo of four standalone Helm charts under charts/ (no root umbrella):
-##   foundation     cert-manager + all CRDs
+## Monorepo of standalone Helm charts under charts/ (no root umbrella):
+##   platform-crds  Gateway API + GIE + KServe llmisvc + AgentGateway CRDs (install first)
+##   foundation     cert-manager + ClusterIssuer + optional LeaderWorkerSet
+##   monitoring     Prometheus + Alertmanager + Grafana (owns its operator CRDs)
 ##   control-plane  agentgateway + KServe llmisvc controllers
 ##   llm-gateway    shared ingress (Gateway + TLS + BBR) — deploy once
 ##   model-server   one LLMInferenceService — deploy once per model
@@ -42,7 +44,7 @@ KIND_NODE_IMAGE ?= kindest/node:v1.35.1
 AGG_IMAGE       ?= ghcr.io/llm-gateway/llm-models-aggregator:v0.1.0
 
 .PHONY: help tools-check kind-create kind-delete deps \
-        foundation control-plane gateway model slurm install-all \
+        platform-crds foundation control-plane monitoring gateway model slurm install-all \
         lint template smoke port-forward port-forward-stop uninstall-all clean \
         aggregator-image images-verify images-save package clean-dist
 
@@ -62,12 +64,24 @@ kind-delete: ## Delete the local kind cluster
 
 ## ── dependencies ─────────────────────────────────────────────────────────────
 deps: ## helm dependency update for the wrapper charts (llm-gateway/model-server have no deps)
+	$(HELM) dependency update ./charts/platform-crds
 	$(HELM) dependency update ./charts/foundation
 	$(HELM) dependency update ./charts/control-plane
+	$(HELM) dependency update ./charts/monitoring
 
 ## ── ordered install (canonical) ──────────────────────────────────────────────
-foundation: tools-check ## L1: cert-manager + CRDs (--wait: cert-manager Ready, CRDs Established)
+platform-crds: tools-check ## L0: all platform CRDs (--wait: CRDs Established before anything renders a CR)
+	$(HELM) upgrade -i platform-crds ./charts/platform-crds \
+	  -n $(RELEASE_NS) --create-namespace --wait --timeout 600s \
+	  -f $(VALUES)
+
+foundation: tools-check ## L1: cert-manager + ClusterIssuer + optional LWS (--wait: cert-manager Ready)
 	$(HELM) upgrade -i foundation ./charts/foundation \
+	  -n $(RELEASE_NS) --create-namespace --wait --timeout 600s \
+	  -f $(VALUES)
+
+monitoring: tools-check ## L1b: telemetry — Prometheus + Alertmanager + Grafana + dashboards/alerts (owns its CRDs; before control-plane)
+	$(HELM) upgrade -i monitoring ./charts/monitoring \
 	  -n $(RELEASE_NS) --create-namespace --wait --timeout 600s \
 	  -f $(VALUES)
 
@@ -92,19 +106,21 @@ slurm: tools-check ## L3c: SLURM external-model backends (edit values/slurm-mode
 	  -n $(RELEASE_NS) --create-namespace \
 	  -f values/slurm-models.yaml
 
-install-all: foundation control-plane gateway model ## Install all (gateway + one model)
+install-all: platform-crds foundation monitoring control-plane gateway model ## Install all (CRDs + telemetry + gateway + one model)
 	@echo ">> platform installed. Try: make smoke    (more models: make model MODEL=… RELEASE=…)"
 
 ## ── dev helpers ──────────────────────────────────────────────────────────────
 lint: ## helm lint every chart with the shared overlay
-	@for c in foundation control-plane llm-gateway model-server; do \
+	@for c in platform-crds foundation control-plane monitoring llm-gateway model-server; do \
 	  $(HELM) lint ./charts/$$c -f $(VALUES); \
 	done
 	$(HELM) lint ./charts/slurm-models -f values/slurm-models.yaml
 
 template: ## Render every chart with the shared overlay (ENV=local|prod)
+	$(HELM) template platform-crds    ./charts/platform-crds  -f $(VALUES)
 	$(HELM) template foundation       ./charts/foundation     -f $(VALUES)
 	$(HELM) template control-plane    ./charts/control-plane  -f $(VALUES)
+	$(HELM) template monitoring       ./charts/monitoring     -f $(VALUES)
 	$(HELM) template platform-gateway ./charts/llm-gateway    -f $(VALUES)
 	$(HELM) template $(RELEASE)       ./charts/model-server   -f $(VALUES) --set servedModelName=$(MODEL)
 	$(HELM) template slurm-models     ./charts/slurm-models   -f values/slurm-models.yaml
@@ -137,8 +153,10 @@ aggregator-image: ## Build + push the models-aggregator image (AGG_IMAGE=<ref>; 
 images-verify: ## Cross-check images.txt against a live render of all four charts (drift guard)
 	@mkdir -p $(DIST)
 	@r=$$( { \
+	     helm template platform-crds    ./charts/platform-crds  -f values/values-local.yaml; \
 	     helm template foundation       ./charts/foundation    -f values/values-local.yaml; \
 	     helm template control-plane    ./charts/control-plane  -f values/values-local.yaml; \
+	     helm template monitoring       ./charts/monitoring     -f values/values-local.yaml; \
 	     helm template platform-gateway ./charts/llm-gateway    -f values/values-local.yaml; \
 	     helm template $(RELEASE)       ./charts/model-server   -f values/values-local.yaml --set servedModelName=$(MODEL); \
 	     helm template $(RELEASE)       ./charts/model-server   -f values/values-prod.yaml  --set servedModelName=$(MODEL) --set modelStorage.pvc.existingClaim=x; \
@@ -168,7 +186,7 @@ images-save: ## docker pull every image in images.txt and docker save them to $(
 	echo "saved $$(printf '%s\n' "$$imgs" | wc -l) images ($$(du -h $(DIST)/images.tar | cut -f1))"
 
 package: images-verify images-save ## Build the offline archive: $(BUNDLE) (images + charts + values + docs + checksums)
-	@for f in charts/foundation/charts/cert-manager-v1.17.0.tgz charts/control-plane/charts/agentgateway-v1.2.1.tgz; do \
+	@for f in charts/platform-crds/charts/kserve-llmisvc-crd-v0.19.0-rc0.tgz charts/platform-crds/charts/agentgateway-crds-v1.2.1.tgz charts/foundation/charts/cert-manager-v1.17.0.tgz charts/control-plane/charts/agentgateway-v1.2.1.tgz charts/monitoring/charts/kube-prometheus-stack-75.6.0.tgz; do \
 	  [ -f "$$f" ] || { echo "missing vendored subchart $$f — run 'make deps' on a connected host first"; exit 1; }; done
 	@[ -f INSTALL.md ] || { echo "INSTALL.md not found"; exit 1; }
 	@stage=$(DIST)/stage; \
@@ -188,6 +206,8 @@ uninstall-all: ## Uninstall releases in reverse order (one model shown; repeat f
 	-$(HELM) uninstall $(RELEASE)         -n $(MODEL_NS)
 	-$(HELM) uninstall platform-gateway   -n $(RELEASE_NS)
 	-$(HELM) uninstall control-plane      -n $(RELEASE_NS)
+	-$(HELM) uninstall monitoring         -n $(RELEASE_NS)
 	-$(HELM) uninstall foundation         -n $(RELEASE_NS)
+	-$(HELM) uninstall platform-crds      -n $(RELEASE_NS)   # last — CRDs outlive workloads
 
 clean: uninstall-all kind-delete ## Uninstall everything and delete the cluster

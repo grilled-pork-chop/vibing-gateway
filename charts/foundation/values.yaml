@@ -1,14 +1,6 @@
-## Global configuration overrides for the foundation chart.
-
-## @section CRD toggles
-##
-## @param gatewayApiCRDs.enabled Render the vendored Gateway API v1.4.1 CRDs
-## @param gieCRDs.enabled Render the vendored Gateway API Inference Extension v1.3.1 CRDs
-##
-gatewayApiCRDs:
-  enabled: true
-gieCRDs:
-  enabled: true
+## Configuration for the foundation chart — the cluster-prerequisite tier
+## (cert-manager + ClusterIssuer + optional LeaderWorkerSet).
+## Platform CRDs are owned by the platform-crds chart, not here.
 
 ## @section cert-manager (jetstack)
 ##
@@ -20,16 +12,33 @@ cert-manager:
   crds:
     enabled: true
 
-## @section KServe llmisvc CRD charts
+## @section Platform ClusterIssuer (for Gateway TLS)
 ##
-## @param kserve-llmisvc-crd.enabled Install the KServe LLMInferenceService CRD chart
+## Creates the ClusterIssuer that llm-gateway's tls.issuerRef points at, so Gateway TLS
+## resolves out of the box. Set kind: selfsigned for local; switch to an ACME/CA issuer
+## in prod via the overlay (see values/values-prod.yaml).
 ##
-kserve-llmisvc-crd:
+## @param issuer.enabled Create the platform ClusterIssuer
+## @param issuer.name Name of the ClusterIssuer (must match llm-gateway tls.issuerRef.name)
+## @param issuer.kind Issuer flavor: "selfsigned" | "ca" | "acme"
+## @param issuer.ca.secretName For kind=ca, the Secret holding the signing CA cert/key
+## @param issuer.acme For kind=acme, the ACME server/email/solver config
+##
+issuer:
   enabled: true
+  name: selfsigned
+  kind: selfsigned
+  ca:
+    secretName: ""
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ""
+    privateKeySecretName: ""
+    solver: {}
 
-## @section AgentGateway CRD chart
+## @section LeaderWorkerSet (optional, multi-node)
 ##
-## @param agentgateway-crds.enabled Install the AgentGateway CRD chart
+## @param lws.enabled Install the LeaderWorkerSet operator — only for multi-node (data/expert parallel) serving
 ##
-agentgateway-crds:
-  enabled: true
+lws:
+  enabled: false

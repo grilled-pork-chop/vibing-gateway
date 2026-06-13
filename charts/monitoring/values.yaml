@@ -1,0 +1,102 @@
+## Global configuration overrides for the monitoring chart.
+##
+## Two layers live here, matching the wrapper-chart convention used by control-plane:
+##   * `monitoring:`              — this chart's OWN templates (dashboards, alerts, EPP scrape)
+##   * `kube-prometheus-stack:`   — passed straight to the vendored subchart
+## The shared overlay (values/values-{local,prod}.yaml) sets the env-specific bits under
+## `kube-prometheus-stack:` exactly like it does for `cert-manager:` / `lws:`.
+
+## @section Platform telemetry (this chart's resources)
+##
+## @param monitoring.enabled Master switch for the platform dashboards + alerts shipped by this chart
+## @param monitoring.dashboards.enabled Render the Grafana dashboard ConfigMaps (sidecar auto-loads them)
+## @param monitoring.alerts.enabled Render the PrometheusRule with the platform alerts
+## @param monitoring.eppServiceMonitor.enabled Scrape the KServe EndpointPicker (EPP) metrics
+## @param monitoring.eppServiceMonitor.selector Label selector matching the EPP Service (verify on a live cluster)
+## @param monitoring.eppServiceMonitor.interval Scrape interval for the EPP ServiceMonitor
+##
+monitoring:
+  enabled: true
+  dashboards:
+    enabled: true
+  alerts:
+    enabled: true
+    ## Thresholds for the PrometheusRule (see templates/prometheusrule.yaml).
+    errorRatePercent: 5        # LLMHighErrorRate fires above this % failures over 10m
+    latencyP99Seconds: 30      # LLMHighLatency fires above this e2e p99 over 10m
+    queueWaiting: 20           # LLMQueueSaturation fires above this many waiting reqs over 10m
+    modelNamespace: llm-demo   # LLMNoModelPods scopes to this namespace (the model-server MODEL_NS)
+  eppServiceMonitor:
+    enabled: false             # opt-in; the EPP Service is KServe-derived — confirm labels first
+    selector:
+      matchLabels:
+        app.kubernetes.io/part-of: inferencepool
+    interval: 15s
+
+## @section kube-prometheus-stack (vendored subchart)
+##
+## This chart OWNS the Prometheus Operator CRDs (crds.enabled=true): they are version-locked to
+## the operator shipped here, so they upgrade in lockstep when kube-prometheus-stack is bumped —
+## unlike the stable platform CRDs in `foundation`. Telemetry is also an optional, self-contained
+## release, so it carries its own CRDs (and keeps them out of foundation's near-full release).
+## The selector flags make Prometheus discover ServiceMonitors / PodMonitors / PrometheusRules
+## platform-wide (not just ones carrying this release's Helm labels), which the per-chart scrape
+## resources rely on.
+##
+kube-prometheus-stack:
+  enabled: true
+  crds:
+    enabled: true
+
+  prometheus:
+    prometheusSpec:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      probeSelectorNilUsesHelmValues: false
+      scrapeConfigSelectorNilUsesHelmValues: false
+      retention: 24h           # short for local; overlay bumps it for prod
+      resources:
+        requests: { cpu: 100m, memory: 512Mi }
+        limits:   { memory: 1Gi }
+      # storageSpec left unset → emptyDir (ephemeral). values-prod.yaml adds a PVC.
+
+  alertmanager:
+    enabled: true
+    alertmanagerSpec:
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits:   { memory: 128Mi }
+
+  grafana:
+    enabled: true
+    # Default login admin / prom-operator (override via adminPassword or an existingSecret).
+    adminPassword: prom-operator
+    defaultDashboardsEnabled: true   # the upstream k8s dashboards
+    sidecar:
+      dashboards:
+        enabled: true                # auto-loads ConfigMaps labelled grafana_dashboard
+        label: grafana_dashboard
+        searchNamespace: ALL
+      datasources:
+        enabled: true                # provisions the Prometheus datasource
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits:   { memory: 256Mi }
+
+  # Cluster add-ons — fine on kind; keep node-exporter for host metrics.
+  kubeStateMetrics:
+    enabled: true
+  nodeExporter:
+    enabled: true
+
+  # We run a single-node kind cluster locally; skip control-plane component scrapes that
+  # don't exist on kind. The overlay re-enables them for a real prod cluster.
+  kubeControllerManager:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  kubeProxy:
+    enabled: false
+  kubeEtcd:
+    enabled: false

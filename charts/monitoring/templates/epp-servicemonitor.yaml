@@ -1,0 +1,23 @@
+{{- /*
+Optional ServiceMonitor for the KServe EndpointPicker (EPP / InferencePool scheduler), which
+exposes request-scheduling metrics. The EPP Service is KServe-derived, so its labels are not
+owned by this repo — confirm them on a live cluster (kubectl get svc -l <selector> --show-labels)
+before enabling. Opt-in via monitoring.eppServiceMonitor.enabled.
+*/ -}}
+{{- if and .Values.monitoring.enabled .Values.monitoring.eppServiceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-epp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    any: true
+  selector:
+    {{- toYaml .Values.monitoring.eppServiceMonitor.selector | nindent 4 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.monitoring.eppServiceMonitor.interval }}
+{{- end }}

@@ -67,19 +67,21 @@ agentgateway:
     #           type: Utilization
     #           averageUtilization: 80
     # verticalPodAutoscaler: {}
-  ## ── Tier 2: monitoring — uncomment if the Prometheus Operator CRDs are installed.
-  ## Creates ServiceMonitors (controller + proxy) and a Grafana dashboard ConfigMap. ──
-  # monitoring:
-  #   enabled: true
-  #   serviceMonitor:
-  #     interval: 15s
-  #     extraLabels: {}                    # e.g. release: prometheus
+  ## ── Tier 2: monitoring — creates ServiceMonitors (controller + proxy) and a Grafana
+  ## dashboard ConfigMap. The `monitoring` chart (installed before control-plane) owns the
+  ## Prometheus Operator CRDs and runs Prometheus/Grafana, so this is safe to enable. Default
+  ## off (opt-in); the shared overlays turn it on. ──
+  monitoring:
+    enabled: false
+    serviceMonitor:
+      interval: 15s
+      extraLabels: {}                    # e.g. release: prometheus
   ## ── Tier 3 (cont.): scope config discovery for multi-tenant ──
   # discoveryNamespaceSelectors: []
 
 ## @section KServe LLMInferenceService controller (generative)
 ##
-## createGIECRDs=false → this chart does NOT ship the GIE CRDs; the foundation chart owns
+## createGIECRDs=false → this chart does NOT ship the GIE CRDs; the platform-crds chart owns
 ## them (vendored, Helm-owned). One CRD owner across the stack means no dual-ownership and
 ## no kubectl label/annotate hack. Requires KServe v0.19.0-rc0+ where this flag exists
 ## (on v0.18.0 the GIE CRDs ship unconditionally).
@@ -94,7 +96,7 @@ agentgateway:
 ##
 ## @param kserve-llmisvc-resources.enabled Install the LLMInferenceService controller
 ## @param kserve-llmisvc-resources.kserve.version KServe image/version pin (must match the CRD chart)
-## @param kserve-llmisvc-resources.kserve.llmisvc.createGIECRDs Ship the GIE CRDs from this chart (false → foundation owns them)
+## @param kserve-llmisvc-resources.kserve.llmisvc.createGIECRDs Ship the GIE CRDs from this chart (false → platform-crds owns them)
 ## @param kserve-llmisvc-resources.kserve.llmisvc.controller.replicas Controller replica count (2+ for leader-elect HA failover — the manager runs with --leader-elect)
 ## @param kserve-llmisvc-resources.kserve.llmisvc.controller.imagePullPolicy Image pull policy (IfNotPresent with a pinned tag for restart determinism; chart default is Always)
 ## @param kserve-llmisvc-resources.kserve.llmisvc.controller.imagePullSecrets Pull secrets for a private/air-gapped registry
@@ -170,10 +172,3 @@ kserve-runtime-configs:
       enabled: false
     llmisvcConfigs:
       enabled: true
-
-## @section LeaderWorkerSet (optional, multi-node)
-##
-## @param lws.enabled Install the LeaderWorkerSet operator — only for multi-node (data/expert parallel) serving
-##
-lws:
-  enabled: false

@@ -1,0 +1,131 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "title": "LLM Usage",
+  "uid": "llm-usage",
+  "tags": ["llm", "vllm", "usage"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(vllm:request_success_total, model)",
+        "query": { "query": "label_values(vllm:request_success_total, model)", "refId": "model" },
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(vllm:request_success_total, llm_inference_service)",
+        "query": { "query": "label_values(vllm:request_success_total, llm_inference_service)", "refId": "service" },
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "pod",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(vllm:num_requests_running{model=~\"$model\"}, pod)",
+        "query": { "query": "label_values(vllm:num_requests_running{model=~\"$model\"}, pod)", "refId": "pod" },
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests/sec by model",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum by (model) (rate(vllm:request_success_total{model=~\"$model\", llm_inference_service=~\"$service\", pod=~\"$pod\"}[5m]))", "legendFormat": "{{model}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Generation tokens/sec by model",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "tps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum by (model) (rate(vllm:generation_tokens_total{model=~\"$model\", llm_inference_service=~\"$service\", pod=~\"$pod\"}[5m]))", "legendFormat": "{{model}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Prompt tokens/sec by model",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "tps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum by (model) (rate(vllm:prompt_tokens_total{model=~\"$model\", llm_inference_service=~\"$service\", pod=~\"$pod\"}[5m]))", "legendFormat": "{{model}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error rate % by model",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "100 * sum by (model) (rate(vllm:request_failure_total{model=~\"$model\"}[5m])) / clamp_min(sum by (model) (rate(vllm:request_success_total{model=~\"$model\"}[5m]) + rate(vllm:request_failure_total{model=~\"$model\"}[5m])), 1)", "legendFormat": "{{model}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "e2e request latency p99 (s)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "histogram_quantile(0.99, sum by (le, model) (rate(vllm:e2e_request_latency_seconds_bucket{model=~\"$model\"}[5m])))", "legendFormat": "{{model}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Generation tokens/sec by pod",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "tps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum by (pod) (rate(vllm:generation_tokens_total{model=~\"$model\", llm_inference_service=~\"$service\", pod=~\"$pod\"}[5m]))", "legendFormat": "{{pod}}" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Running requests",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 24 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum (vllm:num_requests_running{model=~\"$model\", pod=~\"$pod\"})" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Waiting requests",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 24 },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum (vllm:num_requests_waiting{model=~\"$model\", pod=~\"$pod\"})" }
+      ]
+    }
+  ]
+}

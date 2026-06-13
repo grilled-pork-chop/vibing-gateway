@@ -1,0 +1,26 @@
+## Configuration for the platform-crds chart — the single owner of the platform's
+## standalone CRDs (vendored Gateway API + GIE, and the kserve/agentgateway CRD subcharts).
+
+## @section Vendored CRD toggles
+##
+## @param gatewayApiCRDs.enabled Render the vendored Gateway API v1.4.1 CRDs
+## @param gieCRDs.enabled Render the vendored Gateway API Inference Extension v1.3.1 CRDs
+##
+gatewayApiCRDs:
+  enabled: true
+gieCRDs:
+  enabled: true
+
+## @section KServe llmisvc CRD chart
+##
+## @param kserve-llmisvc-crd.enabled Install the KServe LLMInferenceService CRD chart
+##
+kserve-llmisvc-crd:
+  enabled: true
+
+## @section AgentGateway CRD chart
+##
+## @param agentgateway-crds.enabled Install the AgentGateway CRD chart
+##
+agentgateway-crds:
+  enabled: true

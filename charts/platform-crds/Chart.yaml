@@ -1,0 +1,32 @@
+apiVersion: v2
+name: platform-crds
+description: >
+  Owns every cluster CRD the LLM platform needs that is NOT packaged with its own
+  operator: the vendored Gateway API + GIE CRDs (Helm-managed templates) and the
+  KServe llmisvc + AgentGateway CRD subcharts (their operators run in control-plane).
+  Install this FIRST — before foundation. cert-manager and Prometheus Operator CRDs
+  deliberately live with their operators (foundation / monitoring), not here.
+type: application
+version: 0.1.0
+appVersion: "0.19.0-rc0"
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - gateway-api
+  - gateway-api-inference-extension
+  - kserve
+  - agentgateway
+  - crds
+maintainers:
+  - name: vibing-team
+
+dependencies:
+  # KServe LLMInferenceService CRDs (the generative path). Operator lives in control-plane.
+  - name: kserve-llmisvc-crd
+    repository: oci://ghcr.io/kserve/charts
+    version: "v0.19.0-rc0"
+    condition: kserve-llmisvc-crd.enabled
+  # AgentGateway CRDs (AgentgatewayBackend / AgentgatewayPolicy / parameters). Operator lives in control-plane.
+  - name: agentgateway-crds
+    repository: oci://cr.agentgateway.dev/charts
+    version: "v1.2.1"
+    condition: agentgateway-crds.enabled

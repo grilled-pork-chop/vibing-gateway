@@ -1,0 +1,63 @@
+{{- /*
+PrometheusRule — platform alerts. Built from vLLM (vllm:*) and agentgateway metrics, plus
+kube-state-metrics for replica health. Thresholds are values-driven (monitoring.alerts.*).
+Gated on monitoring.alerts.enabled; needs the PrometheusRule CRD (foundation) + an operator.
+*/ -}}
+{{- if and .Values.monitoring.enabled .Values.monitoring.alerts.enabled }}
+{{- $a := .Values.monitoring.alerts }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-llm-platform
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: llm-platform.usage
+      rules:
+        - alert: LLMHighErrorRate
+          expr: |
+            100 * sum by (model) (rate(vllm:request_failure_total[5m]))
+              / clamp_min(sum by (model) (rate(vllm:request_success_total[5m]) + rate(vllm:request_failure_total[5m])), 1)
+              > {{ $a.errorRatePercent }}
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "High LLM error rate for model {{`{{ $labels.model }}`}}"
+            description: "Request failure rate is above {{ $a.errorRatePercent }}% over 10m."
+        - alert: LLMHighLatency
+          expr: |
+            histogram_quantile(0.99, sum by (le, model) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))
+              > {{ $a.latencyP99Seconds }}
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "High e2e latency for model {{`{{ $labels.model }}`}}"
+            description: "p99 end-to-end request latency is above {{ $a.latencyP99Seconds }}s over 10m."
+        - alert: LLMQueueSaturation
+          expr: max by (model) (vllm:num_requests_waiting) > {{ $a.queueWaiting }}
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Request queue saturation for model {{`{{ $labels.model }}`}}"
+            description: "More than {{ $a.queueWaiting }} requests have been waiting for 10m — under-provisioned."
+    - name: llm-platform.availability
+      rules:
+        - alert: LLMNoModelPods
+          expr: |
+            kube_deployment_status_replicas_available{namespace=~"{{ $a.modelNamespace }}"} == 0
+              and kube_deployment_spec_replicas{namespace=~"{{ $a.modelNamespace }}"} > 0
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "Model deployment {{`{{ $labels.deployment }}`}} has zero ready replicas"
+            description: "A served model in namespace {{`{{ $labels.namespace }}`}} has no available pods for 5m — inference is down."
+        - alert: GatewayDown
+          expr: absent(up{job=~".*agentgateway.*"} == 1)
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "agentgateway has no healthy scrape target"
+            description: "No agentgateway controller/proxy target is UP for 5m — the gateway may be down."
+{{- end }}

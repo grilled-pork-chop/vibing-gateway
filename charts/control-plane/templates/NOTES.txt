@@ -17,5 +17,6 @@ The platform controllers are installed in namespace "{{ .Release.Namespace }}".
 Controllers:
   AgentGateway (Inference Extension): {{ if .Values.agentgateway.enabled }}🟢 on{{ else }}⚪ off{{ end }}
   KServe LLMInferenceService:         {{ if index .Values "kserve-llmisvc-resources" "enabled" }}🟢 on{{ else }}⚪ off{{ end }}
-  LeaderWorkerSet (multi-node):       {{ if .Values.lws.enabled }}🟢 on{{ else }}⚪ off (single-node){{ end }}
+
+(LeaderWorkerSet for multi-node serving now installs with the `foundation` chart.)
 ===============================================================================

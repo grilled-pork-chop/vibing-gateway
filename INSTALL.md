@@ -1,9 +1,9 @@
 # Offline / airgapped install
 
-This bundle installs the whole LLM serving platform (four Helm charts: `foundation`,
-`control-plane`, `llm-gateway`, `model-server`) into an environment with **no internet
-access**. Everything needed — container images, charts, subchart dependencies, values, and
-this runbook — ships in a single archive.
+This bundle installs the whole LLM serving platform (six Helm charts: `platform-crds`,
+`foundation`, `control-plane`, `monitoring`, `llm-gateway`, `model-server`) into an environment
+with **no internet access**. Everything needed — container images, charts, subchart dependencies,
+values, and this runbook — ships in a single archive.
 
 The charts already vendor their subchart `.tgz` dependencies under `charts/*/charts/`, so the
 chart side is fully self-contained: **no `helm repo add` / `helm dependency update` is needed
@@ -17,7 +17,7 @@ which is what `images.tar` provides.
 After extracting `llm-platform-offline-<date>.tar.zst` you get:
 
 ```
-charts/            four charts + vendored subchart .tgz (cert-manager, agentgateway, kserve, lws)
+charts/            six charts + vendored subchart .tgz (kserve-llmisvc-crd, agentgateway-crds, cert-manager, agentgateway, lws, kube-prometheus-stack)
 values/            values-local.yaml (CPU/kind) and values-prod.yaml (GPU)
 samples/           model-pvc.yaml (GPU weight PVC example)
 manual/            step-by-step component notes
@@ -109,7 +109,7 @@ make kind-create                       # kind create cluster --name llm-platform
 kind load image-archive images.tar --name llm-platform
 #    (kind ignores the kindest/node entry; it loads the workload images)
 
-# 4. Install, ordered: foundation -> control-plane -> gateway -> one model
+# 4. Install, ordered: platform-crds -> foundation -> monitoring -> control-plane -> gateway -> one model
 make install-all                       # ENV=local by default (CPU vLLM, facebook/opt-125m)
 
 # 5. Smoke test through the Gateway
@@ -180,7 +180,9 @@ mirror them at their original paths (B1) — there is no clean single-flag regis
 The canonical order (what `make install-all` does) is:
 
 ```bash
-make foundation       # L1: cert-manager + all CRDs (--wait)
+make platform-crds    # L0: all platform CRDs (--wait: Established)
+make foundation       # L1: cert-manager + ClusterIssuer + optional LWS (--wait)
+make monitoring       # L1b: Prometheus + Alertmanager + Grafana (owns its CRDs; before control-plane)
 make control-plane    # L2: agentgateway + KServe llmisvc controllers (--wait)
 make gateway          # L3a: shared Gateway + TLS + BBR policy (deploy once)
 make model            # L3b: one LLMInferenceService  (MODEL=<repo> RELEASE=<name>)

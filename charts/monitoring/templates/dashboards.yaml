@@ -1,0 +1,22 @@
+{{- /*
+Grafana dashboards — one ConfigMap per JSON file under dashboards/, labelled so the
+kube-prometheus-stack Grafana sidecar auto-imports them. Drop a new *.json in dashboards/
+and it ships automatically. Gated on monitoring.dashboards.enabled.
+*/ -}}
+{{- if and .Values.monitoring.enabled .Values.monitoring.dashboards.enabled }}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+{{- $name := base $path | trimSuffix ".json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Release.Name }}-dashboard-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    {{- include "monitoring.labels" $ | nindent 4 }}
+data:
+  {{ $name }}.json: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- end }}

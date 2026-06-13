@@ -12,7 +12,6 @@ LLMInferenceService** controller plus its runtime configs. Generative-only. Inst
 | `agentgateway`             | `v1.2.1`      | AgentGateway controller + Envoy data plane; Inference Extension consumes InferencePool |
 | `kserve-llmisvc-resources` | `v0.19.0-rc0` | KServe LLMInferenceService controller (generative); `createGIECRDs=false`              |
 | `kserve-runtime-configs`   | `v0.19.0-rc0` | `ClusterServingRuntimes` / `LLMInferenceServiceConfigs`                                |
-| `lws` (optional)           | `0.8.0`       | LeaderWorkerSet operator — multi-node (data/expert parallel) serving                   |
 
 ## Install
 
@@ -37,17 +36,19 @@ Tier 2/3 monitoring and autoscaling options):
 | `agentgateway.controller.replicaCount`                                            | `2`                             | Controller replicas (stateless xDS; HA failover)                             |
 | `agentgateway.resources`                                                          | `250m/256Mi` → `2/512Mi`        | Requests/limits — also drives `GOMEMLIMIT`/`GOMAXPROCS` via the Downward API |
 | `kserve-llmisvc-resources.enabled`                                                | `true`                          | Install the LLMInferenceService controller                                   |
-| `kserve-llmisvc-resources.kserve.llmisvc.createGIECRDs`                           | `false`                         | `foundation` owns the GIE CRDs (single owner)                                |
+| `kserve-llmisvc-resources.kserve.llmisvc.createGIECRDs`                           | `false`                         | `platform-crds` owns the GIE CRDs (single owner)                            |
 | `kserve-llmisvc-resources.kserve.llmisvc.controller.replicas`                     | `2`                             | Controller replicas (leader-elect HA)                                        |
 | `kserve-llmisvc-resources.kserve.controller.gateway.ingressGateway.kserveGateway` | `kserve/kserve-ingress-gateway` | `<ns>/<name>` of the Gateway the managed router binds to                     |
 | `kserve-runtime-configs.enabled`                                                  | `true`                          | Install runtime configs                                                      |
 | `kserve-runtime-configs.kserve.servingruntime.enabled`                            | `false`                         | Predictive runtimes off (generative only)                                    |
-| `lws.enabled`                                                                     | `false`                         | Install the LeaderWorkerSet operator (multi-node)                            |
+
+> Multi-node serving via **LeaderWorkerSet** (`lws.enabled`) now installs with the `foundation`
+> chart (cluster-prerequisite tier), not here.
 
 ## Notes
 
 - **Generative only.** Uses `kserve-llmisvc-resources` (not the predictive `kserve-resources`)
-  with `createGIECRDs=false`, so the GIE CRDs come from `foundation` rather than being
+  with `createGIECRDs=false`, so the GIE CRDs come from `platform-crds` rather than being
   re-shipped here. Requires KServe `v0.19.0-rc0+`.
 - **Gateway binding.** `kserve-llmisvc-resources.kserve.controller.gateway.ingressGateway.kserveGateway`
   MUST equal the `llm-gateway` chart's `<namespace>/<gatewayName>` (default

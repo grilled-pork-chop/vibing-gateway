@@ -21,7 +21,7 @@ dependencies:
     repository: oci://cr.agentgateway.dev/charts
     version: "v1.2.1"
     condition: agentgateway.enabled
-  # KServe LLMInferenceService controller (generative). createGIECRDs=false (foundation owns GIE CRDs).
+  # KServe LLMInferenceService controller (generative). createGIECRDs=false (platform-crds owns GIE CRDs).
   - name: kserve-llmisvc-resources
     repository: oci://ghcr.io/kserve/charts
     version: "v0.19.0-rc0"
@@ -31,8 +31,3 @@ dependencies:
     repository: oci://ghcr.io/kserve/charts
     version: "v0.19.0-rc0"
     condition: kserve-runtime-configs.enabled
-  # LeaderWorkerSet — only needed for multi-node (data/expert parallel) serving.
-  - name: lws
-    repository: oci://registry.k8s.io/lws/charts
-    version: "0.8.0"
-    condition: lws.enabled

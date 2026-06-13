@@ -3,8 +3,9 @@
 ##
 ## Per-model (GPU path): --set servedModelName=<repo> --set modelStorage.pvc.existingClaim=<pvc>
 ## Pre-seed each model's PVC out-of-band (the GPU path never pulls from HuggingFace at
-## start) — see samples/model-pvc.yaml. The cert-manager Issuer/ClusterIssuer named in
-## tls.issuerRef must already exist.
+## start) — see samples/model-pvc.yaml. The cert-manager ClusterIssuer named in tls.issuerRef
+## must exist — either pre-created, or created by foundation's issuer.* block (set issuer.enabled
+## and fill in issuer.acme.* below).
 
 ## ── foundation + control-plane (Bitnami-style wrappers; consume global:) ─────────
 global:
@@ -12,8 +13,23 @@ global:
   imagePullSecrets: []
 cert-manager:
   enabled: true
-lws:
+lws:                   # foundation — multi-node operator
   enabled: false
+## Platform ClusterIssuer (foundation) for Gateway TLS. ACME needs a real email + a solver
+## wired to YOUR ingress/DNS, so it ships DISABLED: either fill these in and set enabled:true,
+## or pre-create a ClusterIssuer named to match tls.issuerRef.name below. `name` already matches.
+issuer:
+  enabled: false
+  name: letsencrypt-prod
+  kind: acme
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ""                          # REQUIRED before enabling
+    privateKeySecretName: letsencrypt-prod-key
+    solver:
+      http01:
+        ingress:
+          class: ""                    # e.g. your ingress class
 
 ## ── llm-gateway (flat) ───────────────────────────────────────────────────────────
 hostname: llm.example.com
@@ -51,3 +67,46 @@ vllm:
   tolerations: []         # e.g. [ { key: nvidia.com/gpu, operator: Exists, effect: NoSchedule } ]
   topologySpreadConstraints: []
   shmSize: 8Gi
+
+## ── telemetry (Prometheus + Grafana + Alertmanager) ──────────────────────────────
+## Same shared switches as local; prod adds persistent storage, longer retention, resource
+## limits, and the real-cluster control-plane scrapes. Point Alertmanager at a real receiver
+## (Slack/PagerDuty/etc.) via kube-prometheus-stack.alertmanager.config before going live.
+monitoring:
+  enabled: true
+agentgateway:
+  monitoring:
+    enabled: true
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      retentionSize: "45GB"
+      resources:
+        requests: { cpu: 500m, memory: 2Gi }
+        limits:   { memory: 4Gi }
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+  alertmanager:
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+  grafana:
+    persistence:
+      enabled: true
+      size: 5Gi
+  # Real cluster — scrape the control-plane components kind doesn't expose.
+  kubeControllerManager: { enabled: true }
+  kubeScheduler: { enabled: true }
+  kubeProxy: { enabled: true }
+  kubeEtcd: { enabled: true }

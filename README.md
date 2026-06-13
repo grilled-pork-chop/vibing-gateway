@@ -1,6 +1,6 @@
 # llm-platform
 
-A monorepo of four **standalone** Helm charts for an LLM serving platform — **AgentGateway**
+A monorepo of **standalone** Helm charts for an LLM serving platform — **AgentGateway**
 (Gateway API) + native **Body-Based Routing** + **KServe `LLMInferenceService`**. Runs locally
 on **kind** with no GPU (privileged CPU vLLM, `hf://facebook/opt-125m`); use
 `values/values-prod.yaml` (`gpu.enabled=true`) for real vLLM on GPU nodes.
@@ -9,28 +9,35 @@ on **kind** with no GPU (privileged CPU vLLM, `hf://facebook/opt-125m`); use
 
 | Chart                  | Installs                                                                                                                                   |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `charts/foundation`    | cert-manager + **all CRDs** (Gateway API & GIE vendored/Helm-owned; `kserve-crd`, `kserve-llmisvc-crd`, `agentgateway-crds` as deps)       |
-| `charts/control-plane` | `agentgateway` (Inference Extension on) + `kserve-llmisvc-resources` (`createGIECRDs=false`) + `kserve-runtime-configs` (+ optional `lws`) |
+| `charts/platform-crds` | **all platform CRDs** — Gateway API & GIE (vendored/Helm-owned) + `kserve-llmisvc-crd`, `agentgateway-crds` (deps). **Installs first**      |
+| `charts/foundation`    | cert-manager + a platform **ClusterIssuer** (Gateway TLS) + optional **LWS** (multi-node)                                                  |
+| `charts/control-plane` | `agentgateway` (Inference Extension on) + `kserve-llmisvc-resources` (`createGIECRDs=false`) + `kserve-runtime-configs`                    |
 | `charts/llm-gateway`   | Gateway + optional TLS cert + BBR `AgentgatewayPolicy` — **deploy once**                                                                   |
 | `charts/model-server`  | one `LLMInferenceService` — **deploy once per model**; KServe derives the InferencePool/EPP/HTTPRoute                                      |
 
-`foundation` and `control-plane` are wrapper charts (workloads are pinned OCI subcharts);
-`llm-gateway` and `model-server` are dependency-free leaf charts. All four take the same shared
-overlay (`values/values-{local,prod}.yaml`) and read only the keys they define.
+`platform-crds`, `foundation` and `control-plane` are wrapper charts (workloads are pinned OCI
+subcharts); `llm-gateway` and `model-server` are dependency-free leaf charts. All take the same
+shared overlay (`values/values-{local,prod}.yaml`) and read only the keys they define.
+
+**CRD ownership** is uniform: `platform-crds` owns the vendored + standalone CRDs (so they outlive any
+operator and never get deleted by a `helm uninstall foundation`); cert-manager and the Prometheus
+Operator keep the CRDs they ship (in `foundation` and `monitoring` respectively).
 
 ## Quick start (local, no GPU)
 
 ```bash
 make kind-create
-make deps           # helm dependency update for foundation + control-plane
-make install-all    # foundation → control-plane → gateway → one model, ordered
+make deps           # helm dependency update for platform-crds + foundation + control-plane + monitoring
+make install-all    # platform-crds → foundation → monitoring → control-plane → gateway → one model, ordered
 make smoke          # POST a completion through the Gateway
 ```
 
 Equivalent raw commands (all sharing one overlay):
 
 ```bash
+helm upgrade -i platform-crds    ./charts/platform-crds  -f values/values-local.yaml --wait   # CRDs first
 helm upgrade -i foundation       ./charts/foundation     -f values/values-local.yaml --wait
+helm upgrade -i monitoring       ./charts/monitoring     -f values/values-local.yaml --wait
 helm upgrade -i control-plane    ./charts/control-plane  -f values/values-local.yaml --wait
 helm upgrade -i platform-gateway ./charts/llm-gateway    -f values/values-local.yaml          # once
 helm upgrade -i model-opt        ./charts/model-server   -f values/values-local.yaml --set servedModelName=facebook/opt-125m
@@ -158,10 +165,21 @@ above. The aggregator image is built/published with `make aggregator-image` and 
 
 These versions are dictated by **KServe `v0.19.0-rc0`** — it pins the compatible Gateway API,
 cert-manager, GIE, and LWS versions (GIE `v1.3.1` matches its bundled version). Gateway API +
-GIE CRDs are vendored in `charts/foundation/templates`; chart versions are pinned in each `Chart.yaml`.
+GIE CRDs are vendored in `charts/platform-crds/templates`; chart versions are pinned in each `Chart.yaml`.
+
+## Observability
+
+Telemetry ships as a fifth chart (`monitoring`): Prometheus + Alertmanager + Grafana, scraping
+vLLM and agentgateway for **per-model / per-pod / per-LLMInferenceService** request and token usage,
+with Grafana dashboards ("LLM Usage", "Platform health") and `PrometheusRule`
+alerts. It is on by default in the shared overlays (one switch: `monitoring.enabled`) and installed
+in order by `make install-all`. See **[TELEMETRY.md](TELEMETRY.md)** for the full reference and
+how to reach Grafana/Prometheus.
 
 ## Must-do before production
-- AuthPolicy + token rate limit on the route (an open OpenAI endpoint gets scanned in days).
+- AuthPolicy + token rate limit on the route (an open OpenAI endpoint gets scanned in days). Also
+  upgrades per-user usage from best-effort header attribution to enforceable identity.
 - A real `ClusterIssuer` for TLS (`llm-gateway` `tls.issuerRef` points at one but nothing creates it).
-- Per-component `ServiceAccount`s; PDB for the EPP; `PrometheusRule` alerts + Grafana dashboards.
+- Per-component `ServiceAccount`s; PDB for the EPP. (Telemetry — `PrometheusRule` alerts + Grafana
+  dashboards — now ships in the `monitoring` chart; see [TELEMETRY.md](TELEMETRY.md).)
 - vLLM image pre-pull DaemonSet (first pod otherwise blocks on image + weight load).
