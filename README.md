@@ -171,10 +171,10 @@ GIE CRDs are vendored in `charts/platform-crds/templates`; chart versions are pi
 
 Telemetry ships as a fifth chart (`monitoring`): Prometheus + Alertmanager + Grafana, scraping
 vLLM and agentgateway for **per-model / per-pod / per-LLMInferenceService** request and token usage,
-with Grafana dashboards ("LLM Usage", "Usage by user", "Platform health") and `PrometheusRule`
+with Grafana dashboards ("LLM Usage", "Platform health") and `PrometheusRule`
 alerts. It is on by default in the shared overlays (one switch: `monitoring.enabled`) and installed
-in order by `make install-all`. See **[TELEMETRY.md](TELEMETRY.md)** for the full reference, the
-per-user `X-User` attribution, and how to reach Grafana/Prometheus.
+in order by `make install-all`. See **[TELEMETRY.md](TELEMETRY.md)** for the full reference and
+how to reach Grafana/Prometheus.
 
 ## Must-do before production
 - AuthPolicy + token rate limit on the route (an open OpenAI endpoint gets scanned in days). Also

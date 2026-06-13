@@ -111,19 +111,6 @@ modelsEndpoint:
   requestTimeoutSeconds: 3
   refreshIntervalSeconds: 30
 
-## @section Per-user usage attribution (best-effort, header-based)
-##
-## Names the caller identity header used by the "Usage by user" Grafana dashboard. Best-effort only
-## — the header is client-supplied and spoofable; this is for visibility, NOT authentication. The
-## client header already passes through the gateway untouched (no request mutation here); surfacing
-## it as a Prometheus `user` label is a gateway-side metrics setting — see TELEMETRY.md →
-## "Per-user attribution". Kept as config/documentation; no Kubernetes resource is rendered from it.
-##
-## @param usageAttribution.header Identity header used for per-user attribution
-##
-usageAttribution:
-  header: X-User
-
 ## @section Common Parameters
 ##
 ## @param commonLabels Labels added to every deployed resource

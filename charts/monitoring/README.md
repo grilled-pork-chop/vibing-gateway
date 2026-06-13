@@ -20,5 +20,5 @@ make monitoring                 # ENV=local|prod
 - **Alerts** render from `templates/prometheusrule.yaml` (thresholds in `monitoring.alerts.*`).
 
 Master switch: `monitoring.enabled` (shared overlay) — gates this chart's dashboards/alerts and the
-vLLM PodMonitor together. Full reference, including per-user `X-User` attribution and how to reach
+vLLM PodMonitor together. Full reference and how to reach
 Grafana/Prometheus: [`../../TELEMETRY.md`](../../TELEMETRY.md).

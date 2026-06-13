@@ -7,7 +7,7 @@ Per-model / per-pod request & token usage is scraped from vLLM and agentgateway.
 
 1. Open Grafana (default login: admin / prom-operator):
    $ kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-grafana 3000:80
-   → http://localhost:3000  → dashboards "LLM Usage", "Usage by user", "Platform health"
+   → http://localhost:3000  → dashboards "LLM Usage", "Platform health"
 
 2. Open Prometheus (check scrape targets are UP):
    $ kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-kube-prometheus-st-prometheus 9090:9090

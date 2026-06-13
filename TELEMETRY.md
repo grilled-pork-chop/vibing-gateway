@@ -12,7 +12,7 @@ installed, how it works, how to reach it, and how to configure it.
 | --- | --- | --- |
 | Prometheus Operator **CRDs** | `monitoring` chart (`kube-prometheus-stack`, `crds.enabled=true`) | `ServiceMonitor`, `PodMonitor`, `PrometheusRule`, `Prometheus`, `Alertmanager`, … — version-locked to the operator, so they ride with it (not in `platform-crds`). |
 | **Prometheus + Alertmanager + Grafana + operator** | `monitoring` chart (vendors `kube-prometheus-stack`) | The actual telemetry stack, plus kube-state-metrics and node-exporter. |
-| Platform **dashboards** | `monitoring` chart (`dashboards/*.json` → ConfigMaps) | "LLM Usage", "Usage by user", "Platform health" — auto-loaded by the Grafana sidecar. |
+| Platform **dashboards** | `monitoring` chart (`dashboards/*.json` → ConfigMaps) | "LLM Usage", "Platform health" — auto-loaded by the Grafana sidecar. |
 | Platform **alerts** | `monitoring` chart (`PrometheusRule`) | error rate / latency / queue saturation / model-down / gateway-down. |
 | vLLM **scrape** | `model-server` chart (`PodMonitor`) | scrapes every vLLM pod's `/metrics`. |
 | Gateway **scrape** | `control-plane` chart (`agentgateway.monitoring`) | agentgateway controller + proxy ServiceMonitors + a dashboard. |
@@ -77,13 +77,12 @@ Almost all usage data is **already exported** — we just scrape it:
 | `vllm:time_to_first_token_seconds_bucket` | histogram | TTFT |
 | `vllm:num_requests_running` / `vllm:num_requests_waiting` | gauge | in-flight load, queue saturation |
 
-agentgateway request metrics feed the "Gateway" and "Usage by user" panels.
+agentgateway request metrics feed the "Gateway" panels.
 
 ### Dashboards
 
 - **LLM Usage** — requests/sec, prompt & generation tokens/sec, error %, latency p99, running/waiting
   gauges. Template variables: `model`, `service` (LLMInferenceService), `pod`.
-- **Usage by user** — request rate per `user` (see below).
 - **Platform health** — scrape-target `up`, down-by-job, controller restarts.
 
 ### Alerts (`PrometheusRule`, thresholds in `monitoring.alerts.*`)
@@ -95,36 +94,6 @@ agentgateway request metrics feed the "Gateway" and "Usage by user" panels.
 | `LLMQueueSaturation` | waiting requests > `queueWaiting` (default 20) for 10m |
 | `LLMNoModelPods` | a model deployment has 0 ready replicas for 5m |
 | `GatewayDown` | no agentgateway target `up` for 5m |
-
-## Per-user attribution
-
-Usage can be broken down by a caller identity carried in a request header (default **`X-User`**).
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -H 'X-User: alice' \
-  -d '{"model":"publishers/llm-demo/models/facebook/opt-125m","messages":[{"role":"user","content":"hi"}]}'
-```
-
-The client header **passes through the gateway untouched** — there is no request-mutating policy
-(an earlier draft stamped a default header on every request, which would have *clobbered* real
-identities, so it was removed). The header name is recorded in `llm-gateway` values
-(`usageAttribution.header`) and consumed by the "Usage by user" dashboard, which breaks usage down
-by the `user` label.
-
-> 🔓 **This is best-effort attribution, not authentication.** The header is client-supplied and
-> spoofable. For enforceable per-user accounting, add an `AuthPolicy` (see the README must-do) so
-> identity is verified, not asserted.
-
-**Surfacing the header into Prometheus is a gateway-side setting**, not something this repo can
-render: agentgateway must be configured to attach the request-header value as a metric label, after
-which the "Usage by user" panels work directly off `agentgateway_requests_total{user=...}`. Confirm
-that capability on the pinned `agentgateway v1.2.1`; if only **access logs** can carry the header
-(plus the response token `usage`), point those panels at a logs source instead. The missing-value →
-`unknown` default belongs in the PromQL/relabel **once the metric exists** — never by mutating the
-request. Either way, putting a high-cardinality identity on a counter is an anti-pattern — keep the
-set of users bounded (or move per-user token accounting to logs).
 
 ## How to access
 
@@ -150,7 +119,6 @@ kubectl -n kserve port-forward svc/monitoring-kube-prometheus-st-prometheus 9090
 | `monitoring.alerts.*` | monitoring | alert thresholds |
 | `monitoring.eppServiceMonitor.enabled` | monitoring | scrape the EPP (off by default) |
 | `agentgateway.monitoring.enabled` | control-plane | gateway ServiceMonitors + dashboard |
-| `usageAttribution.header` | llm-gateway | identity header name for the "Usage by user" dashboard |
 | `kube-prometheus-stack.*` | monitoring | retention, storage, resources (subchart) |
 
 **Local vs prod** (`values/values-{local,prod}.yaml`): local runs ephemeral with 6h retention;
